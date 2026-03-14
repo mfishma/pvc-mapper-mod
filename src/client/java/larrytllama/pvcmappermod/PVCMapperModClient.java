@@ -22,12 +22,14 @@ import net.minecraft.resources.ResourceLocation;
 public class PVCMapperModClient implements ClientModInitializer {
     public Category MOD_CATEGORY = Category.register(ResourceLocation.fromNamespaceAndPath("pvcmappermod", "category"));
     public KeyMapping OPEN_MAP = new KeyMapping("pvcmappermod.open_map", GLFW.GLFW_KEY_M, MOD_CATEGORY);
+    public KeyMapping OPEN_SHOPS = new KeyMapping("pvcmappermod.open_shops", GLFW.GLFW_KEY_COMMA, MOD_CATEGORY);
     public KeyMapping MINIMAP_ZOOM_IN = new KeyMapping("pvcmappermod.minimap_zoom_in", GLFW.GLFW_KEY_EQUAL,
             MOD_CATEGORY);
     public KeyMapping MINIMAP_ZOOM_OUT = new KeyMapping("pvcmappermod.minimap_zoom_out", GLFW.GLFW_KEY_MINUS,
             MOD_CATEGORY);
 
     public FullScreenMap fsm;
+    public ShopsScreen shopsScreen = new ShopsScreen(Component.literal("PVC Mapper - Shops View"));
     public Minimap minimap;
 
     private static boolean seenMainMenu = false;
@@ -56,6 +58,7 @@ public class PVCMapperModClient implements ClientModInitializer {
 
         this.minimap = Minimap.attach(pfu, sp);
         OPEN_MAP = KeyBindingHelper.registerKeyBinding(OPEN_MAP);
+        OPEN_SHOPS = KeyBindingHelper.registerKeyBinding(OPEN_SHOPS);
         MINIMAP_ZOOM_IN = KeyBindingHelper.registerKeyBinding(MINIMAP_ZOOM_IN);
         MINIMAP_ZOOM_OUT = KeyBindingHelper.registerKeyBinding(MINIMAP_ZOOM_OUT);
         fsm = FullScreenMap.createScreen(Component.literal("PVC Mapper - Map View"), pfu, sp);
@@ -63,6 +66,10 @@ public class PVCMapperModClient implements ClientModInitializer {
             while (OPEN_MAP.consumeClick()) {
                 //this.fsm.resetTiles();
                 Minecraft.getInstance().setScreen(fsm);
+            }
+
+            while (OPEN_SHOPS.consumeClick()) {
+                Minecraft.getInstance().setScreen(new ShopsScreen(Component.literal("PVC Mapper - Shops View")));
             }
 
             while (MINIMAP_ZOOM_IN.consumeClick()) {

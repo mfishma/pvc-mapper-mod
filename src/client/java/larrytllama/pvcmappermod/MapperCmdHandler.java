@@ -103,6 +103,7 @@ public class MapperCmdHandler {
             dispatcher.register(
                 ClientCommandManager.literal("map")
                 .executes((context) -> {
+                    Minecraft.getInstance().setScreen(null);
                     Minecraft.getInstance().setScreen(modclient.fsm);
                     return 1;
                 })
@@ -116,6 +117,20 @@ public class MapperCmdHandler {
                             return 1;
                         })
                     )
+                )
+            );
+
+            dispatcher.register(
+                ClientCommandManager.literal("shops")
+                .then(ClientCommandManager.argument("item", StringArgumentType.greedyString()).suggests(ShopsHandler.ITEM_SUGGESTIONS)
+                    .executes((context) -> {
+                        String item = StringArgumentType.getString(context, "item");
+                        Minecraft.getInstance().setScreen(modclient.shopsScreen);
+                        CompletableFuture.runAsync(() -> {
+                            modclient.shopsScreen.openWithItem(item);
+                        });
+                        return 1;
+                    })
                 )
             );
 
@@ -153,35 +168,6 @@ public class MapperCmdHandler {
                     return 1;
                 }))
             );
-
-            /*dispatcher.register(
-                Commands.literal("mapper_fetch")
-                .then(Commands.argument("type", StringArgumentType.string())
-                .then(Commands.argument("id", StringArgumentType.string())
-                .executes(context -> {
-                    switch (StringArgumentType.getString(context, "type")) {
-                        case "place":
-                            
-                            break;
-                        case "area":
-                            
-                            break;
-                        case "network":
-                            
-                            break;
-                        case "collection":
-                            
-                            break;
-                        case "user":
-                            
-                            break;
-                        default:
-                            context.getSource().sendFailure(Component.literal("Command usage: /mapper_fetch <place|area|network|collection|user> <id>").withStyle(ChatFormatting.RED));
-                            break;
-                    }
-                    return 1;
-                })
-            )));*/
         });
     }
 }
