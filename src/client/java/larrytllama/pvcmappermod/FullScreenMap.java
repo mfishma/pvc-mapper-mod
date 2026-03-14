@@ -805,7 +805,7 @@ public class FullScreenMap extends Screen {
                         }
                     }
 
-                    context.pose().rotate((float) Math.toRadians(-player.yaw));
+                    context.pose().rotate((float) Math.toRadians(player.yaw - 180));
                     context.pose().translate(-4, -4);
                     ResourceLocation playerMarkerChoice;
                     switch (player.world) {
