@@ -36,6 +36,8 @@ public class PlayerFetchUtils {
     private ClaimFetch claimsList;
     private ClaimFetch netherClaimsList;
     public boolean claimsFetched = false;
+    public final ResourceLocation THIS_PLAYER = ResourceLocation.fromNamespaceAndPath("minecraft",
+            "textures/map/decorations/player.png");
     public final ResourceLocation OTHER_PLAYERS_OW = ResourceLocation.fromNamespaceAndPath("minecraft",
             "textures/map/decorations/frame.png");
     public final ResourceLocation OTHER_PLAYERS_NETHER = ResourceLocation.fromNamespaceAndPath("minecraft",

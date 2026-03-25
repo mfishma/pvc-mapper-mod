@@ -812,16 +812,20 @@ public class FullScreenMap extends Screen {
                     context.pose().rotate((float) Math.toRadians(player.yaw - 180));
                     context.pose().translate(-4, -4);
                     ResourceLocation playerMarkerChoice;
-                    switch (player.world) {
-                        case "minecraft_overworld":
-                            playerMarkerChoice = pfu.OTHER_PLAYERS_OW;
-                            break;
-                        case "minecraft_the_nether":
-                            playerMarkerChoice = pfu.OTHER_PLAYERS_NETHER;
-                            break;
-                        default:
-                            playerMarkerChoice = pfu.OTHER_PLAYERS_SOMEWHERE;
-                            break;
+                    if(minecraft.player.getName().equals(Component.literal(player.name))) {
+                        playerMarkerChoice = pfu.THIS_PLAYER;
+                    } else {
+                        switch (player.world) {
+                            case "minecraft_overworld":
+                                playerMarkerChoice = pfu.OTHER_PLAYERS_OW;
+                                break;
+                            case "minecraft_the_nether":
+                                playerMarkerChoice = pfu.OTHER_PLAYERS_NETHER;
+                                break;
+                            default:
+                                playerMarkerChoice = pfu.OTHER_PLAYERS_SOMEWHERE;
+                                break;
+                        }
                     }
 
                     context.blit(
