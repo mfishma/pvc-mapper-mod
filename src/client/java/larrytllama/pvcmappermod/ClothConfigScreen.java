@@ -31,6 +31,7 @@ public class ClothConfigScreen extends Screen {
     private BooleanListEntry showMinimap;
     private BooleanListEntry checkForUpdates;
     private BooleanListEntry useDarkTiles;
+    private BooleanListEntry collectData;
     private StringListEntry mapTileSource;
     private IntegerSliderEntry miniMapZoom;
     private LongSliderEntry minimapScale;
@@ -49,6 +50,7 @@ public class ClothConfigScreen extends Screen {
             sp.bigMapPos = this.bigMapPos.getValue();
             sp.checkForUpdates = this.checkForUpdates.getValue();
             sp.minimapScale = this.minimapScale.getValue() / 100.0;
+            sp.collectData = this.collectData.getValue();
             sp.saveSettings();
         })
         .setTitle(Component.literal("PVC Mapper Mod Settings"));
@@ -97,6 +99,11 @@ public class ClothConfigScreen extends Screen {
             .setTooltip(Component.literal("Check for PVC Mapper Mod updates on Game Launch"), Component.literal("(Displays a non-intrusive popup in the top right to let you know!)"))
             .build();
         miscSettings.addEntry(this.checkForUpdates);
+        this.collectData = entryBuilder.startBooleanToggle(Component.literal("Collect Ranks Data"), sp.collectData)
+            .setDefaultValue(false)
+            .setTooltip(Component.literal("Contribute to the PVC Mapper, uploading ranks and player nicknames!"), Component.literal("(The mod simply uploads the entries provided by the tab list)"))
+            .build();
+        miscSettings.addEntry(this.collectData);
         miscSettings.addEntry(
             entryBuilder.startTextDescription(Component.literal("To change keybinds, head to Options > Controls > Keybinds and scroll down!")).build()
         );

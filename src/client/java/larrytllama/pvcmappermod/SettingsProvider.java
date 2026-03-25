@@ -36,6 +36,8 @@ public class SettingsProvider {
 
     public BigMapPos bigMapPos = BigMapPos.CENTRE_ON_PLAYER;
 
+    public boolean collectData = false;
+
     Path path = FabricLoader.getInstance().getConfigDir().resolve("pvcmapper.json");
 
     public SettingsProvider() {
@@ -56,6 +58,7 @@ public class SettingsProvider {
                 useDarkTiles = settingsFromFile.useDarkTiles;
                 if(settingsFromFile.bigMapPos != null) bigMapPos = settingsFromFile.bigMapPos;
                 checkForUpdates = settingsFromFile.checkForUpdates;
+                collectData = settingsFromFile.collectData;
             } catch(Exception e) {
                 System.out.println(e);
                 new SystemToast(SystemToastId.FILE_DROP_FAILURE, Component.literal("PVC Mapper Settings Error"), Component.literal("Couldn't open the Setting file, check you have permissions to access it!"));
@@ -87,6 +90,7 @@ public class SettingsProvider {
         settingsToSet.useDarkTiles = useDarkTiles;
         settingsToSet.bigMapPos = bigMapPos;
         settingsToSet.checkForUpdates = checkForUpdates;
+        settingsToSet.collectData = collectData;
         try {
             System.out.println("Writing to settings!" + path.getParent().toString());
             Files.createDirectories(path.getParent());
@@ -111,6 +115,7 @@ class SettingsJSON {
     boolean useDarkTiles = false;
     BigMapPos bigMapPos = BigMapPos.CENTRE_ON_PLAYER;
     boolean checkForUpdates = true;
+    boolean collectData = false;
 }
 
 enum MiniMapPositions {

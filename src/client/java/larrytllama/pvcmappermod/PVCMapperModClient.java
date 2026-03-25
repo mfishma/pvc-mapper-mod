@@ -1,7 +1,18 @@
 package larrytllama.pvcmappermod;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.lwjgl.glfw.GLFW;
 
 import larrytllama.pvcmappermod.mixin.client.TabListMixin;
@@ -15,6 +26,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.PlayerTabOverlay;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.KeyMapping.Category;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -57,6 +70,52 @@ public class PVCMapperModClient implements ClientModInitializer {
         });
 
         this.minimap = Minimap.attach(pfu, sp);
+
+        HttpClient http = HttpClient.newHttpClient();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler.scheduleAtFixedRate(() -> {
+            if(sp.collectData) {
+                CompletableFuture.runAsync(() -> {
+                    if(this.minimap.isInQueue || this.minimap.isInTerra2 || this.minimap.isLoadingIn) return; // I love when borrowing old code just works <3
+                    String jsonString = "[";
+                    ClientPacketListener connection = Minecraft.getInstance().getConnection();
+                    if(connection == null) return;
+                    Collection<PlayerInfo> players = connection.getOnlinePlayers();
+                    for (PlayerInfo player : players) {
+                        // Get the player's username
+                        String name = player.getProfile().name();
+                        String tabListName = player.getTabListDisplayName().toString();
+                        jsonString = jsonString + String.format("{\"n\": \"%s\", \"tln\": \"%s\"},", name, tabListName);
+                    }
+                    
+                    // Trim trailing comma otherwise JSON formatting will have a fit
+                    // (And add array enderer too)
+                    jsonString = jsonString.substring(0, jsonString.length() - 1) + "]";
+
+                    // Hey you! Yes you, the one trying to scan the source code to see if you can change your rank on the mapper.
+                    // It's actually pretty impossible to hide this stuff. I researched, but it's pretty impossible.
+                    // So you *could* just change your ranks, but if you do:
+                    //   A) You'll annoy the heck out of me
+                    //   B) Your entries will probably (hopefully) be updated by another client 5s later
+                    //   C) You're mean :(
+                    // So, eh, please don't. Thanks <3
+                    HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create("https://pvc.coolwebsite.uk/api/v2/rank-upload/setPlayerRanks?me=" + Minecraft.getInstance().player.getGameProfile().name()))
+                        .POST(HttpRequest.BodyPublishers.ofString(jsonString))
+                        .header("Content-Type", "application/json")
+                        .build();
+                    try {
+                        http.send(req, HttpResponse.BodyHandlers.ofString());
+                    } catch(Exception e) {
+                        // No bother, we'll just log to console and ignore!
+                        // Who actually cares about HTTP error codes? Nothing wrong with ignoring them! *foreshadowing*
+                        System.out.println("[PVC Mapper Mod] Oh naur! Uploading data to mapper failed. Here's the error:");
+                        System.out.println(e);
+                    }
+                });
+            }
+        }, 0, 60000, TimeUnit.MILLISECONDS );
+
         OPEN_MAP = KeyBindingHelper.registerKeyBinding(OPEN_MAP);
         OPEN_SHOPS = KeyBindingHelper.registerKeyBinding(OPEN_SHOPS);
         MINIMAP_ZOOM_IN = KeyBindingHelper.registerKeyBinding(MINIMAP_ZOOM_IN);
