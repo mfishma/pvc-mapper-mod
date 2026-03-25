@@ -613,37 +613,41 @@ public class FullScreenMap extends Screen {
 
 
             } else if(overlayItemType.equals("area")) {
-                // Title
-                context.drawCenteredString(minecraft.font, Component.literal(overlayFeature.area.name).withStyle(ChatFormatting.BOLD), this.width / 2, 40, 0xFFFFFFFF);
-                // Dividing line
-                context.vLine(this.width / 2, 60, this.height - 20, 0xFF636363);
-                // Description
-                List<FormattedCharSequence> lines = minecraft.font.split(Component.literal(overlayFeature.area.description), (this.width / 2) - 20 );
-                int descHeight = lines.size() * minecraft.font.lineHeight;
-                for (int i = 0; i < lines.size(); i++) {
-                    context.drawString(minecraft.font, lines.get(i), (this.width / 2) + 10, 63 + (i * minecraft.font.lineHeight), 0xFFFFFFFF);
-                }
+                try {
+                    // Title
+                    context.drawCenteredString(minecraft.font, Component.literal(overlayFeature.area.name).withStyle(ChatFormatting.BOLD), this.width / 2, 40, 0xFFFFFFFF);
+                    // Dividing line
+                    context.vLine(this.width / 2, 60, this.height - 20, 0xFF636363);
+                    // Description
+                    List<FormattedCharSequence> lines = minecraft.font.split(Component.literal(overlayFeature.area.description), (this.width / 2) - 20 );
+                    int descHeight = lines.size() * minecraft.font.lineHeight;
+                    for (int i = 0; i < lines.size(); i++) {
+                        context.drawString(minecraft.font, lines.get(i), (this.width / 2) + 10, 63 + (i * minecraft.font.lineHeight), 0xFFFFFFFF);
+                    }
+
+                    // Location
+                    context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/icon/link.png"), (this.width/2) + 8, 66 + descHeight, 0, 0, 12, 12, 12, 12);
+                    context.drawString(minecraft.font, String.format("%s, %s in %s", overlayFeature.area.x, overlayFeature.area.z, pfu.prettyDimensionName(overlayFeature.area.dimension)), (this.width / 2) + 22, 68 + descHeight, 0xFFFFFFFF);
                 
-                // Location
-                context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/icon/link.png"), (this.width/2) + 8, 66 + descHeight, 0, 0, 12, 12, 12, 12);
-                context.drawString(minecraft.font, String.format("%s, %s in %s", overlayFeature.area.x, overlayFeature.area.z, pfu.prettyDimensionName(overlayFeature.area.dimension)), (this.width / 2) + 22, 68 + descHeight, 0xFFFFFFFF);
-            
-                // Added by
-                context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/icon/accessibility.png"), (this.width/2) + 8, 72 + descHeight + minecraft.font.lineHeight, 0, 0, 12, 12, 12, 12);
-                context.drawString(minecraft.font, String.format("Added by %s", overlayFeature.area.addedBy.username), (this.width / 2) + 22, 74 + descHeight + minecraft.font.lineHeight, 0xFFFFFFFF);
+                    // Added by
+                    context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/icon/accessibility.png"), (this.width/2) + 8, 72 + descHeight + minecraft.font.lineHeight, 0, 0, 12, 12, 12, 12);
+                    context.drawString(minecraft.font, String.format("Added by %s", overlayFeature.area.addedBy.username), (this.width / 2) + 22, 74 + descHeight + minecraft.font.lineHeight, 0xFFFFFFFF);
 
-                // Wiki Link
-                if(overlayFeature.area.wiki != null && overlayFeature.area.wiki.length() > 1) {
-                    context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/toast/social_interactions.png"), (this.width/2) + 8, 76 + descHeight + (minecraft.font.lineHeight * 2), 0, 0, 12, 12, 12, 12);
-                    context.drawString(minecraft.font, overlayFeature.area.wiki, (this.width / 2) + 22, 78 + descHeight + (minecraft.font.lineHeight * 2), 0xFFFFFFFF);
-                }
+                    // Wiki Link
+                    if(overlayFeature.area.wiki != null && overlayFeature.area.wiki.length() > 1) {
+                        context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/toast/social_interactions.png"), (this.width/2) + 8, 76 + descHeight + (minecraft.font.lineHeight * 2), 0, 0, 12, 12, 12, 12);
+                        context.drawString(minecraft.font, overlayFeature.area.wiki, (this.width / 2) + 22, 78 + descHeight + (minecraft.font.lineHeight * 2), 0xFFFFFFFF);
+                    }
 
-                context.fill(this.width / 6, 63, (this.width / 2) - 10, 183, 0x70000000);
+                    context.fill(this.width / 6, 63, (this.width / 2) - 10, 183, 0x70000000);
 
-                if(overlayImage != null) {
-                    context.blit(RenderPipelines.GUI_TEXTURED, overlayImage, this.width / 6, 63, 0, 0, (this.width / 2) - (this.width / 6) - 10, 120, (this.width / 2) - (this.width / 6) - 10, 120);
-                } else {
-                    context.drawCenteredString(minecraft.font, overlayImageStatus, (((this.width / 2) - 10 - (this.width / 6)) / 2) + (this.width / 6), 121, 0xFFFFFFFF);
+                    if(overlayImage != null) {
+                        context.blit(RenderPipelines.GUI_TEXTURED, overlayImage, this.width / 6, 63, 0, 0, (this.width / 2) - (this.width / 6) - 10, 120, (this.width / 2) - (this.width / 6) - 10, 120);
+                    } else {
+                        context.drawCenteredString(minecraft.font, overlayImageStatus, (((this.width / 2) - 10 - (this.width / 6)) / 2) + (this.width / 6), 121, 0xFFFFFFFF);
+                    }
+                } catch(Exception e) {
+                    System.out.println("[PVC Mapper Mod] Unable to write area details to screen renderererer.");
                 }
             }
         } else {
