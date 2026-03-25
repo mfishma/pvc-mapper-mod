@@ -15,6 +15,8 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.lwjgl.glfw.GLFW;
 
+import com.mojang.blaze3d.platform.InputConstants;
+
 import larrytllama.pvcmappermod.mixin.client.TabListMixin;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -44,6 +46,8 @@ public class PVCMapperModClient implements ClientModInitializer {
     public FullScreenMap fsm;
     public ShopsScreen shopsScreen = new ShopsScreen(Component.literal("PVC Mapper - Shops View"));
     public Minimap minimap;
+
+    public boolean isInPVC = false;
 
     private static boolean seenMainMenu = false;
 
@@ -76,7 +80,7 @@ public class PVCMapperModClient implements ClientModInitializer {
         scheduler.scheduleAtFixedRate(() -> {
             if(sp.collectData) {
                 CompletableFuture.runAsync(() -> {
-                    if(this.minimap.isInQueue || this.minimap.isInTerra2 || this.minimap.isLoadingIn) return; // I love when borrowing old code just works <3
+                    if(this.minimap.isInQueue || this.minimap.isInTerra2 || this.minimap.isLoadingIn || !this.isInPVC) return; // I love when borrowing old code just works <3
                     String jsonString = "[";
                     ClientPacketListener connection = Minecraft.getInstance().getConnection();
                     if(connection == null) return;
@@ -123,8 +127,14 @@ public class PVCMapperModClient implements ClientModInitializer {
         fsm = FullScreenMap.createScreen(Component.literal("PVC Mapper - Map View"), pfu, sp);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (OPEN_MAP.consumeClick()) {
-                //this.fsm.resetTiles();
-                Minecraft.getInstance().setScreen(fsm);
+                // Alt+M (or Alt+Full-screen-map-key) to hide minimap
+                if(InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_LEFT_ALT) || InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_RIGHT_ALT)) {
+                    if(sp.miniMapEnabled) sp.miniMapEnabled = false;
+                    else sp.miniMapEnabled = true;
+                    sp.saveSettings();
+                } else { 
+                    Minecraft.getInstance().setScreen(fsm);
+                }
             }
 
             while (OPEN_SHOPS.consumeClick()) {
@@ -170,10 +180,12 @@ public class PVCMapperModClient implements ClientModInitializer {
                         minimap.isInQueue = false;
                         minimap.isInTerra2 = false;
                     }
+                    isInPVC = true;
                 } else {
                     // Just assume they want mondo, I don't care lol
                     minimap.isInQueue = false;
                     minimap.isInTerra2 = false;
+                    isInPVC = false; // Prevent sending ranks when not in server
                 }
                 minimap.isLoadingIn = false;
             }
