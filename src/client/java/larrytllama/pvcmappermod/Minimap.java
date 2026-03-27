@@ -432,7 +432,7 @@ public class Minimap {
                         String thisDimension = getDimensionNID().equals("minecraft_terra2") && sp.useDarkTiles ? "minecraft_terra2_night" : getDimensionNID();
                         String url = String.format("%s%s/%d/%d_%d.png",
                             sp.mapTileSource, thisDimension, zoomlevel, i, i2);
-                        TextureUtils.fetchRemoteTexture(url, (id) -> {
+                        TextureUtils.fetchImmediateRemoteTexture(url, (id) -> {
                             textureLocations[indexToSet] = id;
                         });
                     }
@@ -449,23 +449,33 @@ public class Minimap {
             tileCoords[3][1] = divZ + 1;
 
             // Add places in too
-            CompletableFuture.runAsync(() -> {
-                int minx = tileCoords[0][0] * tilesize;
-                int maxx = (tileCoords[3][0] * tilesize) + tilesize;
-                int minz = tileCoords[0][1] * tilesize;
-                int maxz = (tileCoords[3][1] * tilesize) + tilesize;
-                try (Scanner scanner = new Scanner(new URI(
-                        String.format("https://pvc.coolwebsite.uk/api/v1/fetch/places/%s/%d/%d/%d/%d",
-                            getDimensionNID(), minx, maxx, minz, maxz))
-                        .toURL().openStream(), "UTF-8")) {
-                    String out = scanner.useDelimiter("\\A").next();
-                    Gson gson = new Gson();
-                    placesList = new ArrayList<PlaceFetch>(Arrays.asList(gson.fromJson(out, PlaceFetch[].class)));
-                } catch (Exception e) {
-                    System.out.println("Failed to fetch places from PVC Mapper!");
-                    System.out.println(e);
-                }
-            });
+            int minx = tileCoords[0][0] * tilesize;
+            int maxx = (tileCoords[3][0] * tilesize) + tilesize;
+            int minz = tileCoords[0][1] * tilesize;
+            int maxz = (tileCoords[3][1] * tilesize) + tilesize;
+            try {
+                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(new URI(String.format("https://pvc.coolwebsite.uk/api/v1/fetch/places/%s/%d/%d/%d/%d",
+                        getDimensionNID(), minx, maxx, minz, maxz)))
+                    .GET().build();
+                NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                    .thenAccept(response -> {
+                        if (response.statusCode() == 200) {
+                            Gson gson = new Gson();
+                            placesList = new ArrayList<PlaceFetch>(Arrays.asList(gson.fromJson(response.body(), PlaceFetch[].class)));
+                        } else {
+                            System.out.println("Failed to fetch places from PVC Mapper! Code: " + response.statusCode());
+                        }
+                    })
+                    .exceptionally(e -> {
+                        System.out.println("Failed to fetch places from PVC Mapper!");
+                        System.out.println(e);
+                        return null;
+                    });
+            } catch (Exception e) {
+                System.out.println("Failed to fetch places from PVC Mapper!");
+                System.out.println(e);
+            }
 
             hasNotBeenInitialisedYet = false;
         }

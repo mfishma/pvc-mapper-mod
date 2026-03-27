@@ -203,26 +203,27 @@ public class FullScreenMap extends Screen {
     public void resetFeatures() {
         int tilesize = 1 << (17 - zoomlevel);
         double scale = (double) minimapTileSize / tilesize;
-        CompletableFuture.runAsync(() -> {
-            shownFeatures = pfu.fetchFeatures(
-                    currentDimension,
-                    x,
-                    (int) (x + (this.width / scale)),
-                    z,
-                    (int) (z + ((this.height - bottomMapOffset) / scale)));
-            isChangingFeatures = true;
-            // Convert bounds to coordinate format because grr weird format
-            for (int i = 0; i < shownFeatures.length; i++) {
-                if(shownFeatures[i].featureType.equals("area")) {
-                    if(shownFeatures[i].bounds == null) continue;
-                    for (int bound = 0; bound < shownFeatures[i].bounds.length; bound++) {
-                        shownFeatures[i].bounds[bound][0] = metersToPixels(shownFeatures[i].bounds[bound][0]);
-                        shownFeatures[i].bounds[bound][1] = metersToPixels(shownFeatures[i].bounds[bound][1]);
+        pfu.fetchFeaturesAsync(
+                currentDimension,
+                x,
+                (int) (x + (this.width / scale)),
+                z,
+                (int) (z + ((this.height - bottomMapOffset) / scale)))
+            .thenAccept(features -> {
+                shownFeatures = features;
+                isChangingFeatures = true;
+                // Convert bounds to coordinate format because grr weird format
+                for (int i = 0; i < shownFeatures.length; i++) {
+                    if(shownFeatures[i].featureType.equals("area")) {
+                        if(shownFeatures[i].bounds == null) continue;
+                        for (int bound = 0; bound < shownFeatures[i].bounds.length; bound++) {
+                            shownFeatures[i].bounds[bound][0] = metersToPixels(shownFeatures[i].bounds[bound][0]);
+                            shownFeatures[i].bounds[bound][1] = metersToPixels(shownFeatures[i].bounds[bound][1]);
+                        }
                     }
                 }
-            }
-            isChangingFeatures = false;
-        });
+                isChangingFeatures = false;
+            });
     }
 
     @Override
@@ -263,22 +264,23 @@ public class FullScreenMap extends Screen {
                         } else {
                             System.out.println("Feature clicked: " + shownFeatures[i].id);
                             int index = i;
-                            CompletableFuture.runAsync(() -> {
-                                overlayFeature = pfu.fetchArea(shownFeatures[index].id);
-                                overlayItemID = shownFeatures[index].id;
-                                overlayItemType = "area";
-                                overlayOpen = true;
-                                overlayImage = null;
-                                overlayImageStatus = "Loading...";
-                                if(overlayFeature.area.image != null) {
-                                    TextureUtils.fetchRemoteTexture(overlayFeature.area.image, (id) -> {
-                                        overlayImage = id;
+                            pfu.fetchAreaAsync(shownFeatures[index].id)
+                                .thenAccept(feature -> {
+                                    overlayFeature = feature;
+                                    overlayItemID = shownFeatures[index].id;
+                                    overlayItemType = "area";
+                                    overlayOpen = true;
+                                    overlayImage = null;
+                                    overlayImageStatus = "Loading...";
+                                    if(overlayFeature.area.image != null) {
+                                        TextureUtils.fetchImmediateRemoteTexture(overlayFeature.area.image, (id) -> {
+                                            overlayImage = id;
+                                            overlayImageStatus = "No image available";
+                                        });
+                                    } else {
                                         overlayImageStatus = "No image available";
-                                    });
-                                } else {
-                                    overlayImageStatus = "No image available";
-                                }
-                            });
+                                    }
+                                });
                         }
 
                     }
@@ -293,22 +295,23 @@ public class FullScreenMap extends Screen {
                                 if(mbe.hasControlDown()) {
                                     minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, shownFeatures[i].x, shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
                                 } else {
-                                    CompletableFuture.runAsync(() -> {
-                                        overlayFeature = pfu.fetchPlace(shownFeatures[index].id);
-                                        overlayItemID = shownFeatures[index].id;
-                                        overlayItemType = "place";
-                                        overlayOpen = true;
-                                        overlayImage = null;
-                                        overlayImageStatus = "Loading...";
-                                        if(overlayFeature.place.images != null) {
-                                            TextureUtils.fetchRemoteTexture(overlayFeature.place.images, (id) -> {
-                                                overlayImage = id;
+                                    pfu.fetchPlaceAsync(shownFeatures[index].id)
+                                        .thenAccept(feature -> {
+                                            overlayFeature = feature;
+                                            overlayItemID = shownFeatures[index].id;
+                                            overlayItemType = "place";
+                                            overlayOpen = true;
+                                            overlayImage = null;
+                                            overlayImageStatus = "Loading...";
+                                            if(overlayFeature.place.images != null) {
+                                                TextureUtils.fetchImmediateRemoteTexture(overlayFeature.place.images, (id) -> {
+                                                    overlayImage = id;
+                                                    overlayImageStatus = "No image available";
+                                                });
+                                            } else {
                                                 overlayImageStatus = "No image available";
-                                            });
-                                        } else {
-                                            overlayImageStatus = "No image available";
-                                        }
-                                    });
+                                            }
+                                        });
                                 }
                                 break;
 
@@ -820,14 +823,13 @@ public class FullScreenMap extends Screen {
                                 playerMarkerChoice = pfu.OTHER_PLAYERS_OW;
                                 break;
                             case "minecraft_the_nether":
-                                playerMarkerChoice = pfu.OTHER_PLAYERS_NETHER;
-                                break;
-                            default:
-                                playerMarkerChoice = pfu.OTHER_PLAYERS_SOMEWHERE;
-                                break;
-                        }
+                            playerMarkerChoice = pfu.OTHER_PLAYERS_NETHER;
+                            break;
+                        default:
+                            playerMarkerChoice = pfu.OTHER_PLAYERS_SOMEWHERE;
+                            break;
                     }
-
+                    }
                     context.blit(
                             RenderPipelines.GUI_TEXTURED,
                             playerMarkerChoice,
@@ -968,8 +970,7 @@ public class FullScreenMap extends Screen {
         }).bounds(this.width - 25, 30, 20, 20).tooltip(Tooltip.create(Component.literal("PVC Mapper Mod Settings"))).build();
         
         // Add sponsor banner code here
-        CompletableFuture.runAsync(() -> {
-            SponsorBanner banner = SponsorUtils.getBanner();
+        SponsorUtils.getBannerAsync().thenAccept(banner -> {
             SponsorUtils.bannerToTexture(banner.imgurl, (rl) -> {
                 this.sponsorBanner = rl;
             });
