@@ -3,9 +3,9 @@ package larrytllama.pvcmappermod;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.util.Base64;
-import java.util.Scanner;
 import java.util.Base64.Decoder;
 import java.util.function.Consumer;
+import java.util.concurrent.CompletableFuture;
 
 import com.google.gson.Gson;
 import com.mojang.blaze3d.platform.NativeImage;
@@ -22,20 +22,31 @@ class SponsorBanner {
 }
 
 public class SponsorUtils {
-    public static SponsorBanner getBanner() {
-        System.out.println("Fetching sponsor banner from https://pvc.coolwebsite.uk/api/v1/sponsor-banner");
-        SponsorBanner sponsor;
-        try(Scanner scanner = new Scanner(
-            new URI("https://pvc.coolwebsite.uk/api/v1/sponsor-banner").toURL().openStream(), "UTF-8")) {
-            String out = scanner.useDelimiter("\\A").next();
-            Gson gson = new Gson();
-            sponsor = gson.fromJson(out, SponsorBanner.class);
+    public static CompletableFuture<SponsorBanner> getBannerAsync() {
+        System.out.println("Fetching sponsor banner from https://pvc.coolwebsite.uk/api/v1/sponsor-banner...");
+        try {
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(new URI("https://pvc.coolwebsite.uk/api/v1/sponsor-banner"))
+                .GET().build();
+            return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() == 200) {
+                        Gson gson = new Gson();
+                        SponsorBanner banner = gson.fromJson(response.body(), SponsorBanner.class);
+                        return banner;
+                    }
+                    return new SponsorBanner();
+                })
+                .exceptionally(e -> {
+                    System.out.println("Failed to fetch sponsor banners");
+                    e.printStackTrace();
+                    return new SponsorBanner();
+                });
         } catch(Exception e) {
-            sponsor = new SponsorBanner();
             System.out.println("Failed to fetch sponsor banners");
-            System.out.println(e);
+            e.printStackTrace();
+            return CompletableFuture.completedFuture(new SponsorBanner());
         }
-        return sponsor;
     }
 
     public static void bannerToTexture(String bannerDataURL, Consumer<ResourceLocation> callback) {
