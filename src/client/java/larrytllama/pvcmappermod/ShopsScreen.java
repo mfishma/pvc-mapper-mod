@@ -123,8 +123,7 @@ public class ShopsScreen extends Screen {
             );
         this.addRenderableWidget(searchMode);
 
-        CompletableFuture.runAsync(() -> {
-            SponsorBanner banner = SponsorUtils.getBanner();
+        SponsorUtils.getBannerAsync().thenAccept(banner -> {
             SponsorUtils.bannerToTexture(banner.imgurl, (rl) -> {
                 this.sponsorBanner = rl;
             });
@@ -143,7 +142,7 @@ public class ShopsScreen extends Screen {
             else Minecraft.getInstance().setScreen(null);
         } else if(itemSearch.isFocused()) {
             if(keyEvent.key() == GLFW.GLFW_KEY_TAB) {
-                if(filteredItems.length > 0) itemSearch.setValue(filteredItems[0]);
+                itemSearch.setValue(filteredItems[0]);
             } else if(keyEvent.key() == GLFW.GLFW_KEY_ENTER) {
                 if(currentSearchMode.equals("item")) this.openWithItem(this.itemSearch.getValue());
                 else if(currentSearchMode.equals("username")) this.openWithUsername(this.itemSearch.getValue());
@@ -212,7 +211,7 @@ public class ShopsScreen extends Screen {
         // Make a request for the tile
         String url = String.format("%s%s/8/%d_%d.png",
             "https://pvc.coolwebsite.uk/maps/", dimension, tileX, tileZ);
-        TextureUtils.fetchRemoteTexture(url, (id) -> {
+        TextureUtils.fetchImmediateRemoteTexture(url, (id) -> {
             tiles.put(String.format("%s/8/%d_%d", dimension, tileX, tileZ), id);
         });
     }
@@ -336,8 +335,7 @@ public class ShopsScreen extends Screen {
 
     public void openWithItem(String itemID) {
         final String item = itemID;
-        CompletableFuture
-                .supplyAsync(() -> ShopsHandler.shopsByItem(item))
+        ShopsHandler.shopsByItemAsync(item)
                 .thenAccept(shops -> Minecraft.getInstance().execute(() -> {
                     list.removeAllWidgets();
                     for (int i = 0; i < shops.length; i++) {
@@ -351,8 +349,7 @@ public class ShopsScreen extends Screen {
 
     public void openWithUsername(String username) {
         final String user = username;
-        CompletableFuture
-            .supplyAsync(() -> ShopsHandler.shopsByPlayer(user))
+        ShopsHandler.shopsByPlayerAsync(user)
             .thenAccept((shops) -> Minecraft.getInstance().execute(() -> {
                 list.removeAllWidgets();
                 for (int i = 0; i < shops.length; i++) {
