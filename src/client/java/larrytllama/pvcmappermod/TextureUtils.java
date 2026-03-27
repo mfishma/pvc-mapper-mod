@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TextureUtils {
     // Limits background tile downloads to prevent Cloudflare rate-limiting.
     // Increased to 16 from 7-8 because the Stagger logic below prevents bursts. Could try higher.
-    private static final int MAX_CONCURRENT_DOWNLOADS = 16;
+    private static final int MAX_CONCURRENT_DOWNLOADS = 20;
     
     // Global stagger to prevent Cloudflare/Origin challenges during initialization's fetches.
     private static final java.util.concurrent.atomic.AtomicLong lastFetchTime = new java.util.concurrent.atomic.AtomicLong(0);

@@ -77,7 +77,7 @@ public class PlayerFetchUtils {
                                     errorCount = 0;
                                 } else {
                                     errorCount += 1;
-                                    System.out.println("Failed to fetch players. Status: " + response.statusCode());
+                                    System.out.println("Failed to fetch players from PVC Mapper! Code: " + response.statusCode());
                                     if(errorCount > 3) { // Avoid toast-spam
                                         showToast("PVC Mapper Error", "Couldn't connect to PVC Mapper. Relog to retry live tracking.");
                                         stopUpdates();
