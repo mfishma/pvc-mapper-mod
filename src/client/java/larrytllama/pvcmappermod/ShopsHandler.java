@@ -5,7 +5,7 @@ import java.util.Locale;
 
 import com.google.gson.Gson;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
-import java.util.Scanner;
+import java.util.concurrent.CompletableFuture;
 
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -59,48 +59,80 @@ public class ShopsHandler {
         return items;
     }
 
-    public static Shop[] shopsByItem(String item) {
-        try (Scanner scanner = new Scanner(new URI("https://pvc.coolwebsite.uk/pvc-utils/tradesByItem/" + item).toURL().openStream(), "UTF-8")) {
-            String out = scanner.useDelimiter("\\A").next();
-            Gson gson = new Gson();
-            Shop[] shops = gson.fromJson(out, Shop[].class);
-            return shops;
+    public static CompletableFuture<Shop[]> shopsByItemAsync(String item) {
+        try {
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(new URI("https://pvc.coolwebsite.uk/pvc-utils/tradesByItem/" + item))
+                .GET().build();
+            return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() == 200) {
+                        Gson gson = new Gson();
+                        Shop[] shops = gson.fromJson(response.body(), Shop[].class);
+                        return shops;
+                    }
+                    return new Shop[0];
+                })
+                .exceptionally(e -> {
+                    e.printStackTrace();
+                    return new Shop[0];
+                });
         } catch(Exception e) {
-            return new Shop[0];
+            e.printStackTrace();
+            return CompletableFuture.completedFuture(new Shop[0]);
         }
     }
 
-    public static Shop[] shopsByPlayer(String username) {
+    public static CompletableFuture<Shop[]> shopsByPlayerAsync(String username) {
         try {
-        System.out.println(new URI("https://pvc.coolwebsite.uk/pvc-utils/tradesByPlayer/" + username).toURL().toString());
+            System.out.println("Fetching shops for " + username);
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(new URI("https://pvc.coolwebsite.uk/pvc-utils/tradesByPlayer/" + username))
+                .GET().build();
+            return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() == 200) {
+                        Gson gson = new Gson();
+                        Shop[] shops = gson.fromJson(response.body(), Shop[].class);
+                        System.out.println(shops.length);
+                        return shops;
+                    }
+                    return new Shop[0];
+                })
+                .exceptionally(e -> {
+                    System.out.println(e);
+                    e.printStackTrace();
+                    return new Shop[0];
+                });
         } catch(Exception e) {
-            // Whatevs
             System.out.println(e);
             e.printStackTrace();
-        }
-        try (Scanner scanner = new Scanner(new URI("https://pvc.coolwebsite.uk/pvc-utils/tradesByPlayer/" + username).toURL().openStream(), "UTF-8")) {
-            String out = scanner.useDelimiter("\\A").next();
-            Gson gson = new Gson();
-            Shop[] shops = gson.fromJson(out, Shop[].class);
-            System.out.println(shops.length);
-            return shops;
-        } catch(Exception e) {
-            
-            System.out.println(e);
-            e.printStackTrace();
-            return new Shop[0];
+            return CompletableFuture.completedFuture(new Shop[0]);
         }
     }
 
     // Possible use later. I'll see if I fancy it
-    public static ShopsPlayerStats shopsStatsByPlayer(String username) {
-        try (Scanner scanner = new Scanner(new URI("https://pvc.coolwebsite.uk/pvc-utils/playerStats/" + username).toURL().openStream(), "UTF-8")) {
-            String out = scanner.useDelimiter("\\A").next();
-            Gson gson = new Gson();
-            ShopsPlayerStats shops = gson.fromJson(out, ShopsPlayerStats.class);
-            return shops;
+    public static CompletableFuture<ShopsPlayerStats> shopsStatsByPlayerAsync(String username) {
+        try {
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(new URI("https://pvc.coolwebsite.uk/pvc-utils/playerStats/" + username))
+                .GET().build();
+            return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() == 200) {
+                        Gson gson = new Gson();
+                        ShopsPlayerStats stats = gson.fromJson(response.body(), ShopsPlayerStats.class);
+                        return stats;
+                    }
+                    return new ShopsPlayerStats();
+                })
+                .exceptionally(e -> {
+                    e.printStackTrace();
+                    return new ShopsPlayerStats();
+                });
         } catch(Exception e) {
-            return new ShopsPlayerStats();
+            e.printStackTrace();
+            return CompletableFuture.completedFuture(new ShopsPlayerStats());
         }
     }
 

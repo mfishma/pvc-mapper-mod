@@ -24,16 +24,6 @@ import java.time.Instant;
 
 public class MapperCmdHandler {
 
-    // https://stackoverflow.com/a/13632114
-    public static String readStringFromURL(String requestURL) throws IOException {
-        try (Scanner scanner = new Scanner(URI.create(requestURL).toURL().openStream(),
-                StandardCharsets.UTF_8.toString()))
-        {
-            scanner.useDelimiter("\\A");
-            return scanner.hasNext() ? scanner.next() : "";
-        }
-    }
-
     public PlayerFetchUtils pfu;
 
     public MapperCmdHandler(PlayerFetchUtils pfu, PVCMapperModClient modclient) {
@@ -51,8 +41,7 @@ public class MapperCmdHandler {
                         });
                         return 1;
                     }
-                    CompletableFuture.runAsync(() -> {
-                        SearchResult[] results = pfu.fetchSearchResults(query);
+                    pfu.fetchSearchResultsAsync(query).thenAccept(results -> {
                         if(results == null) {
                             Minecraft.getInstance().execute(() -> {
                                 context.getSource().sendError(Component.literal("Search failed. Try again later!").withStyle(ChatFormatting.RED));
