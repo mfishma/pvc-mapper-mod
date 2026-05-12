@@ -150,8 +150,8 @@ public class Minimap {
     }
 
     // Image cache
-    private ResourceLocation[] textureLocations = new ResourceLocation[4]; // Each x/y.
-    private int[][] tileCoords = new int[4][2]; // Each x/y, each tile coord pair.
+    public ResourceLocation[] textureLocations = new ResourceLocation[4]; // Each x/y.
+    public int[][] tileCoords = new int[4][2]; // Each x/y, each tile coord pair.
     
     // Zoom level for map
     public int zoomlevel = 8;

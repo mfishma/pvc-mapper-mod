@@ -54,8 +54,10 @@ public class PlayerFetchUtils {
     }
 
     private int errorCount;
+    public boolean isUpdating = false;
 
     public void startUpdates() {
+        isUpdating = true;
         scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(
                 () -> {
@@ -78,7 +80,7 @@ public class PlayerFetchUtils {
                                 } else {
                                     errorCount += 1;
                                     System.out.println("Failed to fetch players from PVC Mapper! Code: " + response.statusCode());
-                                    if(errorCount > 3) { // Avoid toast-spam
+                                    if(errorCount == 3) { // Avoid toast-spam
                                         showToast("PVC Mapper Error", "Couldn't connect to PVC Mapper. Relog to retry live tracking.");
                                         stopUpdates();
                                     }
@@ -86,7 +88,7 @@ public class PlayerFetchUtils {
                             })
                             .exceptionally(e -> {
                                 errorCount += 1;
-                                if(errorCount > 3) {
+                                if(errorCount == 3) {
                                     showToast("PVC Mapper Error", "Couldn't connect to PVC Mapper. Relog to retry live tracking.");
                                     stopUpdates();
                                 }
@@ -115,6 +117,7 @@ public class PlayerFetchUtils {
     }
 
     public void stopUpdates() {
+        isUpdating = false;
         scheduler.shutdownNow();
     }
 

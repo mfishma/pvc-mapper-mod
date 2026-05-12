@@ -1,14 +1,27 @@
 package larrytllama.pvcmappermod;
 
+import java.lang.reflect.Type;
 import java.net.URI;
 import java.util.Locale;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+
 import java.util.concurrent.CompletableFuture;
 
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 
@@ -67,7 +80,7 @@ public class ShopsHandler {
             return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     if (response.statusCode() == 200) {
-                        Gson gson = new Gson();
+                        Gson gson = new GsonBuilder().registerTypeAdapter(Shop.class, new ShopDeserializer()).create();
                         Shop[] shops = gson.fromJson(response.body(), Shop[].class);
                         return shops;
                     }
@@ -92,7 +105,7 @@ public class ShopsHandler {
             return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     if (response.statusCode() == 200) {
-                        Gson gson = new Gson();
+                        Gson gson = new GsonBuilder().registerTypeAdapter(Shop.class, new ShopDeserializer()).create();
                         Shop[] shops = gson.fromJson(response.body(), Shop[].class);
                         System.out.println(shops.length);
                         return shops;
@@ -140,6 +153,129 @@ public class ShopsHandler {
         String allLowerCase = itemID.replaceAll("_", " ").toLowerCase();
         return allLowerCase.substring(0, 1).toUpperCase() + allLowerCase.substring(1);
     }
+
+    public static CompletableFuture<CustomItem[]> getCustomItems() {
+        try {
+            System.out.println("Fetching custom item dict from PVC Mapper: https://pvc.coolwebsite.uk/api/v2/custom-items");
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(new URI("https://pvc.coolwebsite.uk/api/v2/custom-items"))
+                .GET().build();
+            return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() == 200) {
+                        Gson gson = new Gson();
+                        PreProcessedCustomItem[] preitems = gson.fromJson(response.body(), PreProcessedCustomItem[].class);
+                        CustomItem[] items = new CustomItem[preitems.length];
+                        for (int i = 0; i < preitems.length; i++) {
+                            MutableComponent comp = Component.literal("");
+                            for (int i2 = 0; i2 < preitems[i].new_text.length; i2++) {
+                                MutableComponent newText = Component.literal(preitems[i].new_text[i2].text);
+                                Style newStyle = Style.EMPTY;
+                                if(preitems[i].new_text[i2].bold != null) newStyle = newStyle.withBold(preitems[i].new_text[i2].bold);
+                                if(preitems[i].new_text[i2].italic != null) newStyle = newStyle.withItalic(preitems[i].new_text[i2].italic);
+                                if(preitems[i].new_text[i2].obfuscated != null) newStyle = newStyle.withObfuscated(preitems[i].new_text[i2].obfuscated);
+                                if(preitems[i].new_text[i2].underlined != null) newStyle = newStyle.withUnderlined(preitems[i].new_text[i2].underlined);
+                                if(preitems[i].new_text[i2].strikethrough != null) newStyle = newStyle.withStrikethrough(preitems[i].new_text[i2].strikethrough);
+                                if(preitems[i].new_text[i2].colour != null) newStyle = newStyle.withColor(ChatFormatting.getByName(preitems[i].new_text[i2].colour));
+                                // Game is really weird and makes us use it like this:
+                                // Component.literal("").append(Component.literal("First text that's").append(Component.literal("in a different")).append(Component.literal("Colour")))
+                                comp = comp.append(newText.setStyle(newStyle));
+                            }
+                            items[i] = new CustomItem(preitems[i].old_item_id, preitems[i].new_item_id, comp);
+                        }
+                        return items;
+                    }
+                    return new CustomItem[0];
+                })
+                .exceptionally(e -> {
+                    e.printStackTrace();
+                    return new CustomItem[0];
+                });
+        } catch(Exception e) {
+            e.printStackTrace();
+            return CompletableFuture.completedFuture(new CustomItem[0]);
+        }
+    }
+}
+
+class PreProcessedCustomItemText {
+    Boolean bold;
+    Boolean italic;
+    Boolean underlined;
+    Boolean obfuscated;
+    Boolean strikethrough;
+    String text;
+    String colour;
+}
+
+class PreProcessedCustomItem {
+    String new_item_id;
+    String old_item_id;
+    PreProcessedCustomItemText[] new_text;
+}
+
+class CustomItem {
+    CustomItem(String oiid, String ciid, Component cn) {
+        this.customName = cn;
+        this.originalItemID = oiid;
+        this.convertedItemID = ciid;
+    }
+
+    Component customName;
+    String originalItemID;
+    String convertedItemID;
+}
+
+class ShopDeserializer implements JsonDeserializer<Shop> {
+    @Override
+    public Shop deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext ctx)
+            throws JsonParseException {
+
+        JsonObject obj = json.getAsJsonObject();
+        Shop shop = new Shop();
+        System.out.println("Applying properties");
+        shop.currency = obj.get("currency").getAsString();
+        shop.currency2 = obj.get("currency2").isJsonNull() ? null : obj.get("currency2").getAsString();
+        shop.customName = obj.get("customName").isJsonNull() ? null : obj.get("customName").getAsString();
+        shop.inShulker = obj.get("inShulker").getAsBoolean();
+        shop.item = obj.get("item").getAsString();
+        shop.location = obj.get("location").getAsString();
+        shop.normalisedPrice = obj.get("normalizedPrice").getAsDouble();
+        shop.price = obj.get("price").getAsInt();
+        shop.price2 = obj.get("price2").isJsonNull() ? null : obj.get("price2").getAsInt();
+        shop.shopHash = obj.get("shopHash").getAsString();
+        shop.shopName = obj.get("shopName").getAsString();
+        shop.shopOwner = obj.get("shopOwner").getAsString();
+        shop.stock = obj.get("stock").getAsInt();
+        shop.tradeAmount = obj.get("tradeAmount").getAsInt();
+        System.out.println("Applying enchantments");
+        // Get enchants as ShopEnchants
+        try {
+            JsonArray enchants = obj.get("enchants").getAsJsonArray();
+            shop.enchants = new ShopEnchants[enchants.size()];
+            System.out.println("Applying " + enchants.size() + " enchantments");
+            // Put em all in!
+            for (int se = 0; se < enchants.size(); se++) {
+                JsonObject enchant = enchants.get(se).getAsJsonObject();
+                String enchantID = enchant.keySet().iterator().next();
+                int level = enchant.get(enchantID).getAsInt();
+                System.out.println("Parsed enchant - ID: " + enchantID + ", Level: " + level);
+                shop.enchants[se] = new ShopEnchants();
+                shop.enchants[se].id = enchantID;
+                shop.enchants[se].level = level;
+                System.out.println("Set enchant - ID: " + shop.enchants[se].id + ", Level: " + shop.enchants[se].level);
+            }
+        } catch(Exception e) {
+            shop.enchants = new ShopEnchants[0];
+        }
+
+        return shop;
+    }
+}
+
+class ShopEnchants {
+    String id;
+    int level;
 }
 
 class Shop {
@@ -157,6 +293,10 @@ class Shop {
     String shopOwner;
     Integer stock;
     Integer tradeAmount;
+    ShopEnchants[] enchants;
+    CustomItem priceIsCustom;
+    CustomItem price2IsCustom;
+    CustomItem itemIsCustom;
 }
 
 class ShopsPlayerStats {
@@ -165,3 +305,4 @@ class ShopsPlayerStats {
     Integer trades;
     Integer uniqueItemsOnSale;
 }
+

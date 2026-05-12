@@ -1,6 +1,7 @@
 package larrytllama.pvcmappermod;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Scanner;
 import java.util.concurrent.CompletableFuture;
 
@@ -15,6 +16,7 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
+import net.minecraft.resources.ResourceLocation;
 
 import java.io.IOException;
 import java.net.URI;
@@ -124,6 +126,58 @@ public class MapperCmdHandler {
             );
 
             dispatcher.register(
+                ClientCommandManager.literal("mapper")
+                .then(ClientCommandManager.literal("help").executes((context) -> {
+                    context.getSource().sendFeedback(
+                        Component.literal("Commands List\n")
+                        .append(Component.literal("/afksince <player>").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                            .append(Component.literal(" - Find how long a player has been AFK\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+                        ).append(Component.literal("/search <query>").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                            .append(Component.literal(" - Search the entire PVC Mapper!\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+                        ).append(Component.literal("/shops <item>").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                            .append(Component.literal(" - Search for shops by this item ID\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+                        ).append(Component.literal("/map [x] [z]").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                            .append(Component.literal(" - Open the map screen, optionally to the chosen x/z coords\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+                        ).append(Component.literal("/mapper clearcache").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                            .append(Component.literal(" - Clears the map cache refreshing all tiles\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+                        ).append(Component.literal("/mapper help").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                            .append(Component.literal(" - You can guess what this does\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+                        ).append(Component.literal("/mapper retryupdates").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                            .append(Component.literal(" - Use if the mod stops refreshing players\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+                        )
+                    );
+                    return 1;
+                }))
+                .then(ClientCommandManager.literal("clearcache").executes((context) -> {
+                    // Reset image cache
+                    modclient.minimap.textureLocations = new ResourceLocation[4];
+                    // Including this one which should never realistically be a value
+                    // (Unless PVC's still expanding the map 15000 years later)
+                    modclient.minimap.tileCoords = new int[][] {
+                        { Integer.MIN_VALUE, Integer.MIN_VALUE },
+                        { Integer.MIN_VALUE, Integer.MIN_VALUE },
+                        { Integer.MIN_VALUE, Integer.MIN_VALUE },
+                        { Integer.MIN_VALUE, Integer.MIN_VALUE }
+                    };
+                    // And reset the full map menu tiles too :D
+                    modclient.fsm.tiles = new HashMap<String, ResourceLocation>();
+
+                    context.getSource().sendFeedback(Component.literal("Successfully cleared map tile cache (yay!)"));
+                    return 1;
+                }))
+                .then(ClientCommandManager.literal("retryupdates").executes((context) -> {
+                    if(pfu.isUpdating) {
+                        context.getSource().sendFeedback(Component.literal("The player tracker is already updating!"));
+                    } else {
+                        context.getSource().sendFeedback(Component.literal("Retrying player updates..."));
+                        pfu.startUpdates();
+                    }
+                    return 1;
+                }))
+                
+            );
+
+            dispatcher.register(
                 ClientCommandManager.literal("afksince").then(ClientCommandManager.argument("player", StringArgumentType.greedyString())
                 .executes((context) -> {
                     ArrayList<PlayerFetch> p = pfu.getPlayers();
@@ -152,7 +206,7 @@ public class MapperCmdHandler {
                         }
                     }
                     Minecraft.getInstance().execute(() -> {
-                        context.getSource().sendError(Component.literal("That player was not found online."));
+                        context.getSource().sendFeedback(Component.literal("That player was not found online."));
                     });
                     return 1;
                 }))
