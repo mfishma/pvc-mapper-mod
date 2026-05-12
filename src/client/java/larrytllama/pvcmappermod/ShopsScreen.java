@@ -83,7 +83,9 @@ public class ShopsScreen extends Screen {
                 Component.literal("Search for items..."));
         itemSearch.setHint(Component.literal("E.G PLAYTIME_CERTIFICATE"));
         itemSearch.setMaxLength(64);
+        itemSearch.setFocused(true);
         itemSearch.setResponder((text) -> {
+            if(text.contains(" ")) itemSearch.setValue(text.replaceAll(" ", "_"));
             // Get a list of filtered items, up to 5 of em
             filteredItems = new String[5];
             int filledIndex = 0;
