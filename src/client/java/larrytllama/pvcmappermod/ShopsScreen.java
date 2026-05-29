@@ -141,6 +141,9 @@ public class ShopsScreen extends Screen {
                     Component.literal(banner.description));
             sponsorURLString = banner.link;
         });
+
+        this.setInitialFocus(itemSearch);
+        this.setFocused(itemSearch);
     }
 
     @Override
@@ -150,7 +153,9 @@ public class ShopsScreen extends Screen {
             else Minecraft.getInstance().setScreen(null);
         } else if(itemSearch.isFocused()) {
             if(keyEvent.key() == GLFW.GLFW_KEY_TAB) {
-                itemSearch.setValue(filteredItems[0]);
+                if (filteredItems != null && filteredItems.length > 0 && filteredItems[0] != null) {
+                    itemSearch.setValue(filteredItems[0]);
+                }
             } else if(keyEvent.key() == GLFW.GLFW_KEY_ENTER) {
                 if(currentSearchMode.equals("item")) this.openWithItem(this.itemSearch.getValue());
                 else if(currentSearchMode.equals("username")) this.openWithUsername(this.itemSearch.getValue());
