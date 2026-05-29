@@ -68,7 +68,7 @@ public class PlayerFetchUtils {
                     }
                     try {
                         java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                            .uri(new URI("https://pvc.coolwebsite.uk/api/v1/players"))
+                            .uri(new URI(NetworkUtils.API_V1 + "/players"))
                             .GET().build();
                         NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                             .thenAccept(response -> {
@@ -79,7 +79,7 @@ public class PlayerFetchUtils {
                                     errorCount = 0;
                                 } else {
                                     errorCount += 1;
-                                    System.out.println("Failed to fetch players from PVC Mapper! Code: " + response.statusCode());
+                                    LogUtils.error("Failed to fetch players from PVC Mapper! Code: " + response.statusCode());
                                     if(errorCount == 3) { // Avoid toast-spam
                                         showToast("PVC Mapper Error", "Couldn't connect to PVC Mapper. Run /mapper retryupdates To try again.");
                                         stopUpdates();
@@ -92,16 +92,14 @@ public class PlayerFetchUtils {
                                     showToast("PVC Mapper Error", "Couldn't connect to PVC Mapper. Run /mapper retryupdates To try again.");
                                     stopUpdates();
                                 }
-                                System.out.println("Failed to fetch players from PVC Mapper!");
-                                System.out.println(e);
+                                LogUtils.error("Failed to fetch players from PVC Mapper!", e);
                                 return null;
                             });
                     } catch (Exception e) {
                         errorCount += 1;
                         showToast("PVC Mapper Error", "Couldn't connect to PVC Mapper. Run /mapper retryupdates To try again.");
                         stopUpdates();
-                        System.out.println("Failed to fetch players from PVC Mapper!");
-                        System.out.println(e);
+                        LogUtils.error("Failed to fetch players from PVC Mapper!", e);
                     }
                 },
                 0,
@@ -158,12 +156,12 @@ public class PlayerFetchUtils {
                         }
                     }
                 } else {
-                    System.out.println("Unknown claim type: " + claimsList.markers[i].type);
+                    LogUtils.warn("Unknown claim type: " + claimsList.markers[i].type);
                 }
             }
         } else if(dimension.equals("minecraft_the_nether")) {
             if (netherClaimsList == null) { 
-                System.out.println("No nether claims! :O");
+                LogUtils.debug("No nether claims! :O");
                 return claimsInBounds;
             }
             for (int i = 0; i < netherClaimsList.markers.length; i++) {
@@ -191,11 +189,11 @@ public class PlayerFetchUtils {
                         }
                     }
                 } else {
-                    System.out.println("Unknown claim type: " + netherClaimsList.markers[i].type);
+                    LogUtils.warn("Unknown claim type: " + netherClaimsList.markers[i].type);
                 }
             }
         } else {
-            System.out.println("Unknown claimed dimension: " + dimension);
+            LogUtils.warn("Unknown claimed dimension: " + dimension);
         }
         return claimsInBounds;
     }
@@ -216,11 +214,11 @@ public class PlayerFetchUtils {
     }
 
     public void fetchClaims() {
-        System.out.println("Fetching claims from https://pvc.coolwebsite.uk/api/v1/claims");
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(new URI("https://pvc.coolwebsite.uk/api/v1/claims"))
+                .uri(new URI(NetworkUtils.API_V1 + "/claims"))
                 .GET().build();
+            LogUtils.debug("Fetching claims from " + request.uri().toString());
             NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenAccept(response -> {
                     if (response.statusCode() == 200) {
@@ -229,25 +227,24 @@ public class PlayerFetchUtils {
                                 .create();
                         claimsList = gson.fromJson(response.body(), ClaimFetch.class);
                     } else {
-                        System.out.println("Failed to fetch claims from PVC Mapper! Code: " + response.statusCode());
+                        LogUtils.error("Failed to fetch claims from PVC Mapper! Code: " + response.statusCode());
                     }
                 })
                 .exceptionally(e -> {
-                    System.out.println("Failed to fetch claims from PVC Mapper!");
-                    System.out.println(e);
+                    LogUtils.error("Failed to fetch claims from PVC Mapper!", e);
                     return null;
                 });
         } catch (Exception e) {
             //showToast("Mapper Connect Error", "Check your internet connection?");
-            System.out.println("Failed to fetch claims from PVC Mapper!");
-            System.out.println(e);
+            LogUtils.error("Failed to fetch claims from PVC Mapper!", e);
         }
 
         // Get nether claims too!
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(new URI("https://pvc.coolwebsite.uk/api/v1/claims/nether"))
+                .uri(new URI(NetworkUtils.API_V1 + "/claims/nether"))
                 .GET().build();
+            LogUtils.debug("Fetching nether claims from " + request.uri().toString());
             NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenAccept(response -> {
                     if (response.statusCode() == 200) {
@@ -256,27 +253,25 @@ public class PlayerFetchUtils {
                                 .create();
                         netherClaimsList = gson.fromJson(response.body(), ClaimFetch.class);
                     } else {
-                        System.out.println("Failed to fetch nether claims from PVC Mapper! Code: " + response.statusCode());
+                        LogUtils.error("Failed to fetch nether claims from PVC Mapper! Code: " + response.statusCode());
                     }
                 })
                 .exceptionally(e -> {
-                    System.out.println("Failed to fetch nether claims from PVC Mapper!");
-                    System.out.println(e);
+                    LogUtils.error("Failed to fetch nether claims from PVC Mapper!", e);
                     return null;
                 });
         } catch (Exception e) {
-            System.out.println("Failed to fetch nether claims from PVC Mapper!");
-            System.out.println(e);
+            LogUtils.error("Failed to fetch nether claims from PVC Mapper!", e);
         }
     }
 
     public CompletableFuture<FeatureFetch[]> fetchFeaturesAsync(String dimension, int x1, int x2, int z1, int z2) {
-        String url = String.format("https://pvc.coolwebsite.uk/api/v2/fetch/things/%s/%d/%d/%d/%d", dimension, x1, x2, z1, z2);
-        System.out.println("Fetching all features in area from PVC Mapper.");
+        String url = String.format("%s/fetch/things/%s/%d/%d/%d/%d", NetworkUtils.API_V2, dimension, x1, x2, z1, z2);
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                 .uri(new URI(url))
                 .GET().build();
+            LogUtils.debug("Fetching all features in area from: " + request.uri().toString());
             return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     if (response.statusCode() == 200) {
@@ -288,14 +283,12 @@ public class PlayerFetchUtils {
                 })
                 .exceptionally(e -> {
                     showToast("Mapper Connect Error", "Check your internet connection?");
-                    System.out.println("Failed to fetch features from PVC Mapper!");
-                    System.out.println(e);
+                    LogUtils.error("Failed to fetch features from PVC Mapper!", e);
                     return new FeatureFetch[0];
                 });
         } catch (Exception e) {
             showToast("Mapper Connect Error", "Check your internet connection?");
-            System.out.println("Failed to fetch features from PVC Mapper!");
-            System.out.println(e);
+            LogUtils.error("Failed to fetch features from PVC Mapper!", e);
             return CompletableFuture.completedFuture(new FeatureFetch[0]);
         }
     }
@@ -368,11 +361,11 @@ public class PlayerFetchUtils {
     }
 
     public CompletableFuture<FeatureTypes> fetchPlaceAsync(int placeId) {
-        System.out.println("Fetching place with ID: " + placeId);
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(new URI("https://pvc.coolwebsite.uk/api/v1/fetch/places/byid/" + placeId))
+                .uri(new URI(NetworkUtils.API_V1 + "/fetch/places/byid/" + placeId))
                 .GET().build();
+            LogUtils.debug("Fetching place with ID: " + placeId + " from " + request.uri().toString());
             return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     FeatureTypes ft = new FeatureTypes();
@@ -383,20 +376,18 @@ public class PlayerFetchUtils {
                         showToast("Place not found!", "The place may have just been deleted.");
                     } else {
                         showToast("Mapper Connect Error", "Problem connecting, try again later!");
-                        System.out.println("Failed to fetch places from PVC Mapper! Code: " + response.statusCode());
+                        LogUtils.error("Failed to fetch places from PVC Mapper! Code: " + response.statusCode());
                     }
                     return ft;
                 })
                 .exceptionally(e -> {
                     showToast("Mapper Connect Error", "Problem connecting, try again later!");
-                    System.out.println("Failed to fetch places from PVC Mapper!");
-                    System.out.println(e);
+                    LogUtils.error("Failed to fetch places from PVC Mapper!", e);
                     return new FeatureTypes();
                 });
         } catch (Exception e) {
             showToast("Mapper Connect Error", "Problem connecting, try again later!");
-            System.out.println("Failed to fetch places from PVC Mapper!");
-            System.out.println(e);
+            LogUtils.error("Failed to fetch places from PVC Mapper!", e);
             return CompletableFuture.completedFuture(new FeatureTypes());
         }
     }
@@ -410,38 +401,36 @@ public class PlayerFetchUtils {
     }
 
     public CompletableFuture<FeatureTypes> fetchAreaAsync(int placeId) {
-        System.out.println("Fetching area with ID: " + placeId);
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(new URI("https://pvc.coolwebsite.uk/api/v1/fetch/area/byid/" + placeId))
+                .uri(new URI(NetworkUtils.API_V1 + "/fetch/area/byid/" + placeId))
                 .GET().build();
+            LogUtils.debug("Fetching area with ID: " + placeId + " from " + request.uri().toString());
             return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     FeatureTypes ft = new FeatureTypes();
                     if (response.statusCode() == 200) {
                         Gson gson = new Gson();
                         ft.area = gson.fromJson(response.body(), AreasFetch.class);
-                        System.out.println("X/Z: " + ft.area.x + " / " + ft.area.z);
+                        LogUtils.debug("X/Z: " + ft.area.x + " / " + ft.area.z);
                         ft.area.x = String.format("%d", (int)(metersToPixels(Double.parseDouble(ft.area.x))));
                         ft.area.z = String.format("%d", (int)(metersToPixels(Double.parseDouble(ft.area.z))));
                     } else if (response.statusCode() == 404) {
                         showToast("Area not found!", "The area may have just been deleted.");
                     } else {
                         showToast("Mapper Connect Error", "Problem connecting, try again later!");
-                        System.out.println("Failed to fetch areas from PVC Mapper! Code: " + response.statusCode());
+                        LogUtils.error("Failed to fetch areas from PVC Mapper! Code: " + response.statusCode());
                     }
                     return ft;
                 })
                 .exceptionally(e -> {
                     showToast("Mapper Connect Error", "Problem connecting, try again later!");
-                    System.out.println("Failed to fetch areas from PVC Mapper!");
-                    System.out.println(e);
+                    LogUtils.error("Failed to fetch areas from PVC Mapper!", e);
                     return new FeatureTypes();
                 });
         } catch (Exception e) {
             showToast("Mapper Connect Error", "Problem connecting, try again later!");
-            System.out.println("Failed to fetch areas from PVC Mapper!");
-            System.out.println(e);
+            LogUtils.error("Failed to fetch areas from PVC Mapper!", e);
             return CompletableFuture.completedFuture(new FeatureTypes());
         }
     }
@@ -449,7 +438,7 @@ public class PlayerFetchUtils {
     public CompletableFuture<SearchResult[]> fetchSearchResultsAsync(String query) {
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(new URI("https://pvc.coolwebsite.uk/api/v2/search/" + query))
+                .uri(new URI(NetworkUtils.API_V2 + "/search/" + query))
                 .GET().build();
             return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
@@ -462,20 +451,18 @@ public class PlayerFetchUtils {
                         return null;
                     } else {
                         showToast("Mapper Connect Error", "Problem connecting, try again later!");
-                        System.out.println("Failed to fetch search from PVC Mapper! Code: " + response.statusCode());
+                        LogUtils.error("Failed to fetch search from PVC Mapper! Code: " + response.statusCode());
                         return null;
                     }
                 })
                 .exceptionally(e -> {
                     showToast("Mapper Connect Error", "Problem connecting, try again later!");
-                    System.out.println("Failed to fetch search from PVC Mapper!");
-                    System.out.println(e);
+                    LogUtils.error("Failed to fetch search from PVC Mapper!", e);
                     return null;
                 });
         } catch (Exception e) {
             showToast("Mapper Connect Error", "Problem connecting, try again later!");
-            System.out.println("Failed to fetch search from PVC Mapper!");
-            System.out.println(e);
+            LogUtils.error("Failed to fetch search from PVC Mapper!", e);
             return CompletableFuture.completedFuture(null);
         }
     }
@@ -489,12 +476,12 @@ public class PlayerFetchUtils {
             // Just forget it, something weird's going on
             return;
         }
-        System.out.println("Checking for updates from https://pvc.coolwebsite.uk/mod/downloads/modversions.json...");
-        System.out.println("Current version: " + McVersionName + ", " + MapperModVersionName);
+        LogUtils.debug("Current version: %s, %s", McVersionName, MapperModVersionName);
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(new URI("https://pvc.coolwebsite.uk/mod/downloads/modversions.json"))
+                .uri(new URI(NetworkUtils.BASE_URL + "/mod/downloads/modversions.json"))
                 .GET().build();
+            LogUtils.debug("Checking for updates from " + request.uri().toString() + "...");
             NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenAccept(response -> {
                     if (response.statusCode() == 200) {
@@ -502,7 +489,7 @@ public class PlayerFetchUtils {
                         VersionHistory[] vh = gson.fromJson(response.body(), VersionHistory[].class);
                         for (int i = 0; i < vh.length; i++) {
                             if(vh[i].mcVersion.equals(McVersionName)) {
-                                System.out.println("Version for this MC version is found! v" + vh[i].version);
+                                LogUtils.debug("Version for this MC version is found! v" + vh[i].version);
                                 final String newVersion = vh[i].version;
                                 if(!newVersion.equals(MapperModVersionName)) {
                                     Minecraft.getInstance().execute(() -> {

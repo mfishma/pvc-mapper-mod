@@ -100,7 +100,7 @@ public class FullScreenMap extends Screen {
     private int topLeftX = 0;
     private int topLeftZ = 0;
     public int zoomlevel = 8;
-    public int maxZoomLevel = 8;
+    public int maxZoomLevel = 9;
     public int minZoomLevel = 1;
 
     public int x = 0;
@@ -122,6 +122,8 @@ public class FullScreenMap extends Screen {
 
     // On mouse move, we'll check for new tiles
     private void onMouseMove(int mouseX, int mouseY) {
+        int renderZoom = Math.min(8, zoomlevel);
+        int renderTileSize = 1 << (17 - renderZoom);
         int tilesize = 1 << (17 - zoomlevel);
         double scale = (double) minimapTileSize / tilesize;
         double worldLeft = x;
@@ -130,30 +132,23 @@ public class FullScreenMap extends Screen {
         double worldBottom = z + (this.height / scale);
         String dimension = "" + currentDimension;
         // Figure out tile no. at top left/bottom right
-        int topLeftTileX = Math.floorDiv((int) worldLeft, tilesize) - 1;
-        int topLeftTileZ = Math.floorDiv((int) worldTop, tilesize) - 1;
-        int bottomRightTileX = Math.floorDiv((int) worldRight, tilesize) + 1;
-        int bottomRightTileZ = Math.floorDiv((int) worldBottom, tilesize) + 1;
+        int topLeftTileX = Math.floorDiv((int) worldLeft, renderTileSize) - 1;
+        int topLeftTileZ = Math.floorDiv((int) worldTop, renderTileSize) - 1;
+        int bottomRightTileX = Math.floorDiv((int) worldRight, renderTileSize) + 1;
+        int bottomRightTileZ = Math.floorDiv((int) worldBottom, renderTileSize) + 1;
 
         int thisZoomLevel = zoomlevel;
         for (int iX = topLeftTileX; iX < bottomRightTileX; iX++) {
             if(thisZoomLevel != zoomlevel && !currentDimension.equals(dimension)) break;
             for (int iZ = topLeftTileZ; iZ < bottomRightTileZ; iZ++) {
                 if(thisZoomLevel != zoomlevel && !currentDimension.equals(dimension)) break;
-                ResourceLocation tile = tiles.get(String.format("%s/%d/%d_%d", dimension, thisZoomLevel, iX, iZ));
-                if (tile == null) {
-                    final int tileX = iX;
-                    final int tileZ = iZ;
-                    // Temporarily set to a blurred tile to stop the repeating null
-                    tiles.put(String.format("%s/%d/%d_%d", dimension, thisZoomLevel, tileX, tileZ), blurredTile);
-                    // Make a request for the tile
-                    String thisDimension = dimension.equals("minecraft_terra2") && sp.useDarkTiles ? "minecraft_terra2_night" : dimension;
-                    String url = String.format("%s%s/%d/%d_%d.png",
-                        sp.mapTileSource, thisDimension, zoomlevel, iX, iZ);
-                    TextureUtils.fetchRemoteTexture(url, (id) -> {
-                        tiles.put(String.format("%s/%d/%d_%d", dimension, thisZoomLevel, tileX, tileZ), id);
-                    });
-                }
+                
+                String thisDimension = dimension.equals("minecraft_terra2") && sp.useDarkTiles ? "minecraft_terra2_night" : dimension;
+                String url = String.format("%s%s/%d/%d_%d.png",
+                    sp.mapTileSource, thisDimension, renderZoom, iX, iZ);
+                
+                // Rely on TextureUtils to manage the cache and deduplicate pending fetches
+                TextureUtils.fetchRemoteTexture(url, (id) -> {});
             }
         }
     }
@@ -181,7 +176,7 @@ public class FullScreenMap extends Screen {
                 shownClaims = new ArrayList<ClaimMarkers>();
                 return;
             }
-            System.out.println("Checkbox selected! Finding claims...");
+            LogUtils.debug("Checkbox selected! Finding claims...");
             shownClaims = pfu.getClaimsInBounds(currentDimension, x, (int) (x + (this.width / scale)), z,
                     (int) (z + ((this.height - bottomMapOffset) / scale)));
         } else {
@@ -251,7 +246,7 @@ public class FullScreenMap extends Screen {
             // Check to see if a thing has been clicked
             for (int i = 0; i < shownFeatures.length; i++) {
                 if(shownFeatures[i].id == 1) {
-                    System.out.println("X/Z: " + ((shownFeatures[i].x - x) * scale) + " / " + ((shownFeatures[i].z - z) * scale));
+                    LogUtils.debug("X/Z: " + ((shownFeatures[i].x - x) * scale) + " / " + ((shownFeatures[i].z - z) * scale));
                 }
                 if(shownFeatures[i].featureType.equals("area")) {
                     int itemWidth = minecraft.font.width(shownFeatures[i].name);
@@ -260,9 +255,9 @@ public class FullScreenMap extends Screen {
                         mbe.y() > ((shownFeatures[i].z - z) * scale) - (minecraft.font.lineHeight / 2) &&
                         mbe.y() < ((shownFeatures[i].z - z) * scale) + (minecraft.font.lineHeight / 2)) {
                         if(mbe.hasControlDown()) {
-                            minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, shownFeatures[i].x, shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
+                            minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
                         } else {
-                            System.out.println("Feature clicked: " + shownFeatures[i].id);
+                            LogUtils.debug("Feature clicked: " + shownFeatures[i].id);
                             int index = i;
                             pfu.fetchAreaAsync(shownFeatures[index].id)
                                 .thenAccept(feature -> {
@@ -293,7 +288,7 @@ public class FullScreenMap extends Screen {
                         switch (shownFeatures[i].featureType) {
                             case "place":
                                 if(mbe.hasControlDown()) {
-                                    minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, shownFeatures[i].x, shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
+                                    minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
                                 } else {
                                     pfu.fetchPlaceAsync(shownFeatures[index].id)
                                         .thenAccept(feature -> {
@@ -317,7 +312,7 @@ public class FullScreenMap extends Screen {
 
                             case "portal":
                                 if(mbe.hasControlDown()) {
-                                    minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", pfu.getPortalPrettyName(shownFeatures[i].type), shownFeatures[i].x, shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
+                                    minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", pfu.getPortalPrettyName(shownFeatures[i].type), (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
                                 }
                                 break;
                             default:
@@ -650,10 +645,14 @@ public class FullScreenMap extends Screen {
                         context.drawCenteredString(minecraft.font, overlayImageStatus, (((this.width / 2) - 10 - (this.width / 6)) / 2) + (this.width / 6), 121, 0xFFFFFFFF);
                     }
                 } catch(Exception e) {
-                    System.out.println("[PVC Mapper Mod] Unable to write area details to screen renderererer.");
+                    LogUtils.debug("[PVC Mapper Mod] Unable to write area details to screen renderererer.");
                 }
             }
         } else {
+            int renderZoom = Math.min(8, zoomlevel);
+            int renderTileSize = 1 << (17 - renderZoom);
+            int drawSize = minimapTileSize * (1 << (zoomlevel - renderZoom));
+            
             int tilesize = 1 << (17 - zoomlevel);
             double scale = (double) minimapTileSize / tilesize;
             double worldLeft = x;
@@ -662,34 +661,36 @@ public class FullScreenMap extends Screen {
             double worldBottom = z + ((this.height - bottomMapOffset) / scale);
 
             // Figure out tile no. at top left/bottom right
-            int topLeftTileX = Math.floorDiv((int) worldLeft, tilesize);
-            int topLeftTileZ = Math.floorDiv((int) worldTop, tilesize);
-            int bottomRightTileX = Math.floorDiv((int) worldRight, tilesize) + 1;
-            int bottomRightTileZ = Math.floorDiv((int) worldBottom, tilesize) + 1;
+            int topLeftTileX = Math.floorDiv((int) worldLeft, renderTileSize);
+            int topLeftTileZ = Math.floorDiv((int) worldTop, renderTileSize);
+            int bottomRightTileX = Math.floorDiv((int) worldRight, renderTileSize) + 1;
+            int bottomRightTileZ = Math.floorDiv((int) worldBottom, renderTileSize) + 1;
 
             // Iterate thru visible tiles
-            double xOffsetFromTileStart = Math.floorMod((int) worldLeft, tilesize);
-            double zOffsetFromTileStart = Math.floorMod((int) worldTop, tilesize);
+            double xOffsetFromTileStart = Math.floorMod((int) worldLeft, renderTileSize);
+            double zOffsetFromTileStart = Math.floorMod((int) worldTop, renderTileSize);
             context.scissorStack.push(new ScreenRectangle(0, 0, this.width, this.height - bottomMapOffset));
             for (int iX = topLeftTileX; iX < bottomRightTileX; iX++) {
                 for (int iZ = topLeftTileZ; iZ < bottomRightTileZ; iZ++) {
-                    ResourceLocation tile = tiles.get(String.format("%s/%d/%d_%d", currentDimension, zoomlevel, iX, iZ));
+                    String thisDimension = currentDimension.equals("minecraft_terra2") && sp.useDarkTiles ? "minecraft_terra2_night" : currentDimension;
+                    String url = String.format("%s%s/%d/%d_%d.png", sp.mapTileSource, thisDimension, renderZoom, iX, iZ);
+                    ResourceLocation tile = TextureUtils.getCachedTexture(url);
                     if (tile == null)
-                        continue;
+                        tile = TextureUtils.blurredTile;
                     context.pose().pushMatrix();
                     context.pose().translate(
                             (float) ((topLeftX - (xOffsetFromTileStart * scale)) + // The top left GUI pos - how far
                                                                                    // from the start of the tile
-                                    ((iX - topLeftTileX) * minimapTileSize)), // + How many tiles along we are
+                                    ((iX - topLeftTileX) * drawSize)), // + How many tiles along we are
                             (float) ((topLeftZ - (zOffsetFromTileStart * scale)) + // All the same
-                                    ((iZ - topLeftTileZ) * minimapTileSize)) // For the Z axis
+                                    ((iZ - topLeftTileZ) * drawSize)) // For the Z axis
                     );
                     context.blit(
                             RenderPipelines.GUI_TEXTURED, tile, // Render tile with the following x pos:
                             0, 0,
                             0, 0, // u/v
-                            minimapTileSize, minimapTileSize, // width/height
-                            minimapTileSize, minimapTileSize // texturewidth/textureheight
+                            drawSize, drawSize, // width/height
+                            drawSize, drawSize // texturewidth/textureheight
                     );
                     context.pose().popMatrix();
                 }

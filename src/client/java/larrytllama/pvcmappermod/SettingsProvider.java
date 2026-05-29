@@ -26,7 +26,7 @@ public class SettingsProvider {
 
     public boolean miniMapEnabled = true;
 
-    public String mapTileSource = "https://pvc.coolwebsite.uk/maps/";
+    public String mapTileSource = NetworkUtils.BASE_URL + "/maps/";
 
     public boolean useDarkTiles = false;
 
@@ -37,18 +37,20 @@ public class SettingsProvider {
     public BigMapPos bigMapPos = BigMapPos.CENTRE_ON_PLAYER;
 
     public boolean collectData = false;
+    
+    public boolean debugMode = false;
 
     Path path = FabricLoader.getInstance().getConfigDir().resolve("pvcmapper.json");
 
     public SettingsProvider() {
-        updateSettings();
+        // Initialization decoupled to PVCMapperModClient to prevent static initialization race conditions
     }
 
     public void updateSettings() {
         Gson gson = new Gson();
         if(Files.exists(path)) {
             try {
-                System.out.println(path.toString());
+                LogUtils.info("Loading config from: " + path.toString());
                 SettingsJSON settingsFromFile = gson.fromJson(Files.readString(path), SettingsJSON.class);
                 if(settingsFromFile.minimapScale != 0.0) minimapScale = settingsFromFile.minimapScale;
                 if(settingsFromFile.miniMapZoom != 0) miniMapZoom = settingsFromFile.miniMapZoom;
@@ -59,8 +61,9 @@ public class SettingsProvider {
                 if(settingsFromFile.bigMapPos != null) bigMapPos = settingsFromFile.bigMapPos;
                 checkForUpdates = settingsFromFile.checkForUpdates;
                 collectData = settingsFromFile.collectData;
+                debugMode = settingsFromFile.debugMode;
             } catch(Exception e) {
-                System.out.println(e);
+                LogUtils.error("Couldn't read settings file", e);
                 new SystemToast(SystemToastId.FILE_DROP_FAILURE, Component.literal("PVC Mapper Settings Error"), Component.literal("Couldn't open the Setting file, check you have permissions to access it!"));
             }
         } else {
@@ -79,7 +82,7 @@ public class SettingsProvider {
     }
 
     public void saveSettings() {
-        System.out.println("Saving settings!");
+        LogUtils.debug("Saving settings!");
         Gson gson = new Gson();
         SettingsJSON settingsToSet = new SettingsJSON();
         settingsToSet.mapTileSource = mapTileSource;
@@ -91,8 +94,9 @@ public class SettingsProvider {
         settingsToSet.bigMapPos = bigMapPos;
         settingsToSet.checkForUpdates = checkForUpdates;
         settingsToSet.collectData = collectData;
+        settingsToSet.debugMode = debugMode;
         try {
-            System.out.println("Writing to settings!" + path.getParent().toString());
+            LogUtils.debug("Writing to settings!" + path.getParent().toString());
             Files.createDirectories(path.getParent());
             Files.writeString(
                 path,
@@ -111,11 +115,12 @@ class SettingsJSON {
     double minimapScale = 1;
     MiniMapPositions miniMapPos = MiniMapPositions.TOP_RIGHT;
     boolean miniMapEnabled = true;
-    String mapTileSource = "https://pvc.coolwebsite.uk/maps/";
+    String mapTileSource = NetworkUtils.BASE_URL + "/maps/";
     boolean useDarkTiles = false;
     BigMapPos bigMapPos = BigMapPos.CENTRE_ON_PLAYER;
     boolean checkForUpdates = true;
     boolean collectData = false;
+    boolean debugMode = false;
 }
 
 enum MiniMapPositions {

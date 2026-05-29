@@ -23,11 +23,11 @@ class SponsorBanner {
 
 public class SponsorUtils {
     public static CompletableFuture<SponsorBanner> getBannerAsync() {
-        System.out.println("Fetching sponsor banner from https://pvc.coolwebsite.uk/api/v1/sponsor-banner...");
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(new URI("https://pvc.coolwebsite.uk/api/v1/sponsor-banner"))
+                .uri(new URI(NetworkUtils.API_V1 + "/sponsor-banner"))
                 .GET().build();
+            LogUtils.debug("Fetching sponsor banner from " + request.uri().toString() + "...");
             return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     if (response.statusCode() == 200) {
@@ -38,13 +38,11 @@ public class SponsorUtils {
                     return new SponsorBanner();
                 })
                 .exceptionally(e -> {
-                    System.out.println("Failed to fetch sponsor banners");
-                    e.printStackTrace();
+                    LogUtils.error("Failed to fetch sponsor banners", e);
                     return new SponsorBanner();
                 });
         } catch(Exception e) {
-            System.out.println("Failed to fetch sponsor banners");
-            e.printStackTrace();
+            LogUtils.error("Failed to fetch sponsor banners", e);
             return CompletableFuture.completedFuture(new SponsorBanner());
         }
     }
@@ -70,8 +68,7 @@ public class SponsorUtils {
                 callback.accept(resourceLocation);
             });
         } catch(Exception e) {
-            System.out.println("Error converting data to image content:");
-            System.out.println(e);
+            LogUtils.error("Error converting data to image content:", e);
             callback.accept(null);
         }
 
