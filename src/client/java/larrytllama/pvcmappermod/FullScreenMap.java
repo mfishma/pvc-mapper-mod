@@ -260,7 +260,7 @@ public class FullScreenMap extends Screen {
                         mbe.y() > ((shownFeatures[i].z - z) * scale) - (minecraft.font.lineHeight / 2) &&
                         mbe.y() < ((shownFeatures[i].z - z) * scale) + (minecraft.font.lineHeight / 2)) {
                         if(mbe.hasControlDown()) {
-                            minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, shownFeatures[i].x, shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
+                            minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
                         } else {
                             System.out.println("Feature clicked: " + shownFeatures[i].id);
                             int index = i;
@@ -293,7 +293,7 @@ public class FullScreenMap extends Screen {
                         switch (shownFeatures[i].featureType) {
                             case "place":
                                 if(mbe.hasControlDown()) {
-                                    minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, shownFeatures[i].x, shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
+                                    minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
                                 } else {
                                     pfu.fetchPlaceAsync(shownFeatures[index].id)
                                         .thenAccept(feature -> {
@@ -317,7 +317,7 @@ public class FullScreenMap extends Screen {
 
                             case "portal":
                                 if(mbe.hasControlDown()) {
-                                    minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", pfu.getPortalPrettyName(shownFeatures[i].type), shownFeatures[i].x, shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
+                                    minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", pfu.getPortalPrettyName(shownFeatures[i].type), (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
                                 }
                                 break;
                             default:
