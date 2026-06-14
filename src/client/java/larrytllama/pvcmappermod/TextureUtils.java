@@ -12,34 +12,64 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class TextureUtils {
     // Limits background tile downloads to prevent Cloudflare rate-limiting.
     // Increased to 16 from 7-8 because the Stagger logic below prevents bursts. Could try higher.
-    private static final int MAX_CONCURRENT_DOWNLOADS = 20;
+    private static final int MAX_CONCURRENT_DOWNLOADS = 25;
     
     // Global stagger to prevent Cloudflare/Origin challenges during initialization's fetches.
     private static final java.util.concurrent.atomic.AtomicLong lastFetchTime = new java.util.concurrent.atomic.AtomicLong(0);
     private static final int FETCH_STAGGER_MS = 50;
 
-    // LIFO ThreadPool: Prioritizes the most recently requested tiles over older, off-screen tiles.
-    private static final ExecutorService downloadExecutor = new ThreadPoolExecutor(
-            MAX_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_DOWNLOADS, 0L, TimeUnit.MILLISECONDS,
-            new LinkedBlockingDeque<Runnable>() {
-                @Override
-                public boolean offer(Runnable e) {
-                    return super.offerFirst(e);
-                }
-            }
-    );
+    // LIFO Queue for pending downloads. Prioritizes the most recently requested tiles.
+    private static final LinkedBlockingDeque<Runnable> fetchQueue = new LinkedBlockingDeque<>();
+    private static final java.util.concurrent.atomic.AtomicInteger activeDownloads = new java.util.concurrent.atomic.AtomicInteger(0);
     private static final ConcurrentHashMap<String, Long> failedFetches = new ConcurrentHashMap<>();
+
+    private static void pumpQueue() {
+        while (activeDownloads.get() < MAX_CONCURRENT_DOWNLOADS) {
+            Runnable task = fetchQueue.pollFirst();
+            if (task == null) break;
+            
+            activeDownloads.incrementAndGet();
+            Thread.ofVirtual().start(() -> {
+                try {
+                    task.run();
+                } finally {
+                    activeDownloads.decrementAndGet();
+                    pumpQueue();
+                }
+            });
+        }
+    }
+    
+    private static final int MAX_CACHED_TILES = 200;
+    
+    // LRU Cache for managing memory limit
+    private static final java.util.Map<String, ResourceLocation> tileCache = java.util.Collections.synchronizedMap(
+        new java.util.LinkedHashMap<String, ResourceLocation>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(java.util.Map.Entry<String, ResourceLocation> eldest) {
+                if (size() > MAX_CACHED_TILES) {
+                    ResourceLocation id = eldest.getValue();
+                    net.minecraft.client.Minecraft.getInstance().getTextureManager().release(id);
+                    activeTiles.decrementAndGet();
+                    return true;
+                }
+                return false;
+            }
+        }
+    );
+    
+    // Memory Profiling Counter
+    public static final java.util.concurrent.atomic.AtomicInteger activeTiles = new java.util.concurrent.atomic.AtomicInteger(0);
     
     static ResourceLocation blurredTile = ResourceLocation.fromNamespaceAndPath("pvcmappermod","textures/gui/tileloading.png");
+
+    private static final ConcurrentHashMap<String, Boolean> pendingFetches = new ConcurrentHashMap<>();
 
     /**
      * Fetches an image from a URL, converts it to a DynamicTexture, registers it,
@@ -49,6 +79,12 @@ public class TextureUtils {
      * @param callback  The callback to run when the texture is ready.
      */
     public static void fetchRemoteTexture(String urlString, Consumer<ResourceLocation> callback) {
+        ResourceLocation cached = tileCache.get(urlString);
+        if (cached != null) {
+            callback.accept(cached);
+            return;
+        }
+
         Long failedTime = failedFetches.get(urlString);
         if (failedTime != null && (System.currentTimeMillis() - failedTime < 10000)) {
             // Already failed recently. Use blurred tile silently.
@@ -56,10 +92,17 @@ public class TextureUtils {
             return;
         }
 
-        System.out.println("Fetching image from source: " + urlString);
-        downloadExecutor.submit(() -> {
+        if (pendingFetches.putIfAbsent(urlString, Boolean.TRUE) != null) {
+            // Already fetching
+            callback.accept(blurredTile);
+            return;
+        }
+
+        LogUtils.debug("Fetching image from source: " + urlString);
+        fetchQueue.addFirst(() -> {
             executeFetch(urlString, callback);
         });
+        pumpQueue();
     }
 
     /**
@@ -67,9 +110,36 @@ public class TextureUtils {
      * Intended exclusively for UI elements like POI overlays and banners.
      */
     public static void fetchImmediateRemoteTexture(String urlString, Consumer<ResourceLocation> callback) {
-        System.out.println("Fetching immediate UI image from source: " + urlString);
-        CompletableFuture.runAsync(() -> {
+        ResourceLocation cached = tileCache.get(urlString);
+        if (cached != null) {
+            callback.accept(cached);
+            return;
+        }
+
+        if (pendingFetches.putIfAbsent(urlString, Boolean.TRUE) != null) {
+            callback.accept(blurredTile);
+            return;
+        }
+
+        LogUtils.debug("Fetching immediate UI image from source: " + urlString);
+        Thread.ofVirtual().start(() -> {
             executeFetch(urlString, callback);
+        });
+    }
+
+    public static ResourceLocation getCachedTexture(String urlString) {
+        return tileCache.get(urlString);
+    }
+
+    public static void clearCache() {
+        Minecraft.getInstance().execute(() -> {
+            for (ResourceLocation id : tileCache.values()) {
+                Minecraft.getInstance().getTextureManager().release(id);
+                activeTiles.decrementAndGet();
+            }
+            tileCache.clear();
+            pendingFetches.clear();
+            failedFetches.clear();
         });
     }
 
@@ -85,7 +155,7 @@ public class TextureUtils {
         } catch (InterruptedException ignored) {}
 
         try {
-            String targetUrl = urlString.startsWith("https://") ? urlString : "https://pvc.coolwebsite.uk" + urlString;
+            String targetUrl = urlString.startsWith("https://") ? urlString : NetworkUtils.BASE_URL + urlString;
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(new URI(targetUrl))
                     .GET()
@@ -95,14 +165,20 @@ public class TextureUtils {
             HttpResponse<InputStream> response = NetworkUtils.HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() == 404) {
-                Minecraft.getInstance().execute(() -> callback.accept(blurredTile));
+                Minecraft.getInstance().execute(() -> {
+                    pendingFetches.remove(urlString);
+                    callback.accept(blurredTile);
+                });
                 return;
             }
             
             if (response.statusCode() != 200) {
-                System.out.println("[TextureUtils Error] Failed to fetch tile: " + urlString + " (HTTP " + response.statusCode() + ")");
+                LogUtils.warn("[TextureUtils] Failed to fetch tile: " + urlString + " (HTTP " + response.statusCode() + ")");
                 failedFetches.put(urlString, System.currentTimeMillis());
-                Minecraft.getInstance().execute(() -> callback.accept(blurredTile)); // using blurredTile so we don't return null
+                Minecraft.getInstance().execute(() -> {
+                    pendingFetches.remove(urlString);
+                    callback.accept(blurredTile); // using blurredTile so we don't return null
+                });
                 return;
             }
 
@@ -127,6 +203,13 @@ public class TextureUtils {
                 //dynamicTexture
                 ResourceLocation resourceLocation = ResourceLocation.fromNamespaceAndPath("pvcmappermod", idStr);
                 Minecraft.getInstance().getTextureManager().register(resourceLocation, dynamicTexture);
+                tileCache.put(urlString, resourceLocation);
+                
+                int currentTiles = activeTiles.incrementAndGet();
+                int osThreads = java.lang.management.ManagementFactory.getThreadMXBean().getThreadCount();
+                LogUtils.debug("[Memory Profiling] Active Map Tiles Loaded: %d (Est. VRAM: %.2f MB) | OS Threads: %d", currentTiles, currentTiles * 0.25, osThreads);
+                
+                pendingFetches.remove(urlString);
                 callback.accept(resourceLocation);
                 failedFetches.remove(urlString); // clear cache on success
             });
@@ -138,9 +221,11 @@ public class TextureUtils {
                 return;
             }
 
-            System.err.println("[TextureUtils Error] Exception while fetching URL: " + urlString);
-            Minecraft.getInstance().execute(() -> callback.accept(null));
-            e.printStackTrace();
+            LogUtils.warn("[TextureUtils Error] Exception while fetching URL: " + urlString, e);
+            Minecraft.getInstance().execute(() -> {
+                pendingFetches.remove(urlString);
+                callback.accept(null);
+            });
         }
     }
 

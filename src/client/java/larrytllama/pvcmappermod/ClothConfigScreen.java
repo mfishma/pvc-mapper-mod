@@ -32,6 +32,7 @@ public class ClothConfigScreen extends Screen {
     private BooleanListEntry checkForUpdates;
     private BooleanListEntry useDarkTiles;
     private BooleanListEntry collectData;
+    private BooleanListEntry debugMode;
     private StringListEntry mapTileSource;
     private IntegerSliderEntry miniMapZoom;
     private LongSliderEntry minimapScale;
@@ -51,6 +52,7 @@ public class ClothConfigScreen extends Screen {
             sp.checkForUpdates = this.checkForUpdates.getValue();
             sp.minimapScale = this.minimapScale.getValue() / 100.0;
             sp.collectData = this.collectData.getValue();
+            sp.debugMode = this.debugMode.getValue();
             sp.saveSettings();
         })
         .setTitle(Component.literal("PVC Mapper Mod Settings"));
@@ -80,7 +82,7 @@ public class ClothConfigScreen extends Screen {
 
         ConfigCategory miscSettings = builder.getOrCreateCategory(Component.literal("Miscellaneous Settings"));
         this.mapTileSource = entryBuilder.startTextField(Component.literal("Tile Source"), sp.mapTileSource)
-            .setDefaultValue("https://pvc.coolwebsite.uk/maps/") 
+            .setDefaultValue(NetworkUtils.BASE_URL + "/maps/") 
             .setTooltip(Component.literal("Where the PVC Mapper Mod should get its background tiles from."), Component.literal("Important! Your URL must include the / at the end!").withStyle(ChatFormatting.RED), Component.literal("If the default isn't working, try: https://web.peacefulvanilla.club/maps/tiles/"))
             .build();
         miscSettings.addEntry(this.mapTileSource);
@@ -104,6 +106,13 @@ public class ClothConfigScreen extends Screen {
             .setTooltip(Component.literal("Contribute to the PVC Mapper, uploading ranks and player nicknames!"), Component.literal("(The mod simply uploads the entries provided by the tab list)"))
             .build();
         miscSettings.addEntry(this.collectData);
+        
+        this.debugMode = entryBuilder.startBooleanToggle(Component.literal("Debug Mode"), sp.debugMode)
+            .setDefaultValue(false)
+            .setTooltip(Component.literal("Adds extra logging in the console."))
+            .build();
+        miscSettings.addEntry(this.debugMode);
+        
         miscSettings.addEntry(
             entryBuilder.startTextDescription(Component.literal("To change keybinds, head to Options > Controls > Keybinds and scroll down!")).build()
         );

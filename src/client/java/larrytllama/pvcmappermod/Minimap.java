@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.Scanner;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -150,7 +149,7 @@ public class Minimap {
     }
 
     // Image cache
-    public ResourceLocation[] textureLocations = new ResourceLocation[4]; // Each x/y.
+    public String[] textureUrls = new String[4]; // Each x/y.
     public int[][] tileCoords = new int[4][2]; // Each x/y, each tile coord pair.
     
     // Zoom level for map
@@ -278,7 +277,7 @@ public class Minimap {
         } else if(sp.miniMapPos == MiniMapPositions.TOP_LEFT) {
             tooltipX = 100;
         } else {
-            System.out.println("Whoops no minimap pos: " + sp.miniMapPos);
+            LogUtils.debug("Whoops no minimap pos: " + sp.miniMapPos);
         }
         TooltipRenderUtil.renderTooltipBackground(
                 context,
@@ -304,7 +303,7 @@ public class Minimap {
 
     public void resetTileImageCache() {
         // Reset image cache
-        textureLocations = new ResourceLocation[4];
+        textureUrls = new String[4];
         // Including this one which should never realistically be a value
         // (Unless PVC's still expanding the map 15000 years later)
         tileCoords = new int[][] {
@@ -398,7 +397,7 @@ public class Minimap {
         if(!this.lastDimension.equals(getDimensionNID())) {
             this.lastDimension = getDimensionNID();
             // Reset image cache
-            textureLocations = new ResourceLocation[4];
+            textureUrls = new String[4];
             // Including this one which should never realistically be a value
             // (Unless PVC's still expanding the map 15000 years later)
             tileCoords = new int[][] {
@@ -413,29 +412,23 @@ public class Minimap {
         double x = mc.player.getX();
         double z = mc.player.getZ();
         // Calculate tile size from zoom
+        int renderZoom = Math.min(8, zoomlevel);
+        int renderTileSize = 1 << (17 - renderZoom);
+        int drawSize = minimapTileSize * (1 << (zoomlevel - renderZoom));
         int tilesize = 1 << (17 - zoomlevel);
         // Make sure negative tiles start at -1 not -0
         // -256 to work with our 2x2 grid moving minimap
-        int divX = Math.floorDiv((int) (x) - 256, tilesize);
-        int divZ = Math.floorDiv((int) (z) - 256, tilesize);
+        int divX = Math.floorDiv((int) (x) - 256, renderTileSize);
+        int divZ = Math.floorDiv((int) (z) - 256, renderTileSize);
         if (tileCoords[0][0] != divX || tileCoords[0][1] != divZ) {
-            ResourceLocation[] tempArr = textureLocations.clone();
             // Save ourselves requesting content we already have.
             int newArrayIndex = 0;
             for (int i2 = divZ; i2 < divZ + 2; i2++) {
                 for (int i = divX; i < divX + 2; i++) {
-                    int arrayIndex = arrHasSubArr(tileCoords, i, i2);
-                    if (arrayIndex != -1) {
-                        textureLocations[newArrayIndex] = tempArr[arrayIndex];
-                    } else {
-                        int indexToSet = newArrayIndex;
-                        String thisDimension = getDimensionNID().equals("minecraft_terra2") && sp.useDarkTiles ? "minecraft_terra2_night" : getDimensionNID();
-                        String url = String.format("%s%s/%d/%d_%d.png",
-                            sp.mapTileSource, thisDimension, zoomlevel, i, i2);
-                        TextureUtils.fetchImmediateRemoteTexture(url, (id) -> {
-                            textureLocations[indexToSet] = id;
-                        });
-                    }
+                    String thisDimension = getDimensionNID().equals("minecraft_terra2") && sp.useDarkTiles ? "minecraft_terra2_night" : getDimensionNID();
+                    String url = String.format("%s%s/%d/%d_%d.png",
+                        sp.mapTileSource, thisDimension, renderZoom, i, i2);
+                    textureUrls[newArrayIndex] = url;
                     newArrayIndex += 1;
                 }
             }
@@ -449,13 +442,13 @@ public class Minimap {
             tileCoords[3][1] = divZ + 1;
 
             // Add places in too
-            int minx = tileCoords[0][0] * tilesize;
-            int maxx = (tileCoords[3][0] * tilesize) + tilesize;
-            int minz = tileCoords[0][1] * tilesize;
-            int maxz = (tileCoords[3][1] * tilesize) + tilesize;
+            int minx = tileCoords[0][0] * renderTileSize;
+            int maxx = (tileCoords[3][0] * renderTileSize) + renderTileSize;
+            int minz = tileCoords[0][1] * renderTileSize;
+            int maxz = (tileCoords[3][1] * renderTileSize) + renderTileSize;
             try {
                 java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                    .uri(new URI(String.format("https://pvc.coolwebsite.uk/api/v1/fetch/places/%s/%d/%d/%d/%d",
+                    .uri(new URI(String.format("%s/fetch/places/%s/%d/%d/%d/%d", NetworkUtils.API_V1,
                         getDimensionNID(), minx, maxx, minz, maxz)))
                     .GET().build();
                 NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
@@ -464,17 +457,15 @@ public class Minimap {
                             Gson gson = new Gson();
                             placesList = new ArrayList<PlaceFetch>(Arrays.asList(gson.fromJson(response.body(), PlaceFetch[].class)));
                         } else {
-                            System.out.println("Failed to fetch places from PVC Mapper! Code: " + response.statusCode());
+                            LogUtils.error("Failed to fetch places from PVC Mapper! Code: " + response.statusCode());
                         }
                     })
                     .exceptionally(e -> {
-                        System.out.println("Failed to fetch places from PVC Mapper!");
-                        System.out.println(e);
+                        LogUtils.error("Failed to fetch places from PVC Mapper!", e);
                         return null;
                     });
             } catch (Exception e) {
-                System.out.println("Failed to fetch places from PVC Mapper!");
-                System.out.println(e);
+                LogUtils.error("Failed to fetch places from PVC Mapper!", e);
             }
 
             hasNotBeenInitialisedYet = false;
@@ -486,11 +477,11 @@ public class Minimap {
         
         double scale = (double) minimapTileSize / tilesize;
 
-        double tileX = Math.floorDiv((long) x, tilesize);
-        double tileZ = Math.floorDiv((long) z, tilesize);
+        double tileX = Math.floorDiv((long) x, renderTileSize);
+        double tileZ = Math.floorDiv((long) z, renderTileSize);
 
-        double localX = Math.floorMod((long) x, tilesize);
-        double localZ = Math.floorMod((long) z, tilesize);
+        double localX = Math.floorMod((long) x, renderTileSize);
+        double localZ = Math.floorMod((long) z, renderTileSize);
 
         double offsetX = localX * scale;
         double offsetZ = localZ * scale;
@@ -500,44 +491,64 @@ public class Minimap {
 
         context.enableScissor(topLeftX, topLeftZ, topLeftX + minimapTileSize, topLeftZ + minimapTileSize);
         // Draw each tile to be visible
-        if (textureLocations[0] != null) {
+        if (textureUrls[0] != null) {
             // If I'm stood at 0, 0 this tile will be -1_-1.png and be at topLeftX-40,
             // topLeftZ-40
             // If I'm stood at 256, 256 this tile will be 0_0.png and be at topLeftX-0,
             // topLeftZ-0
-            double drawX = (divX + 0 - tileX) * minimapTileSize - viewX;
-            double drawZ = (divZ + 0 - tileZ) * minimapTileSize - viewZ;
+            ResourceLocation tex = TextureUtils.getCachedTexture(textureUrls[0]);
+            if (tex == null) {
+                TextureUtils.fetchImmediateRemoteTexture(textureUrls[0], (id) -> {});
+                tex = TextureUtils.blurredTile;
+            }
+            double drawX = (divX + 0 - tileX) * drawSize - viewX;
+            double drawZ = (divZ + 0 - tileZ) * drawSize - viewZ;
             context.pose().pushMatrix();
             context.pose().translate((float) (topLeftX + drawX), (float) (topLeftZ + drawZ));
-            context.blit(RenderPipelines.GUI_TEXTURED, textureLocations[0], 0, 0, 0, 0, minimapTileSize,
-                    minimapTileSize, minimapTileSize, minimapTileSize);
+            context.blit(RenderPipelines.GUI_TEXTURED, tex, 0, 0, 0, 0, drawSize,
+                    drawSize, drawSize, drawSize);
             context.pose().popMatrix();
         }
-        if (textureLocations[1] != null) {
-            double drawX = (divX + 1 - tileX) * minimapTileSize - viewX;
-            double drawZ = (divZ + 0 - tileZ) * minimapTileSize - viewZ;
+        if (textureUrls[1] != null) {
+            ResourceLocation tex = TextureUtils.getCachedTexture(textureUrls[1]);
+            if (tex == null) {
+                TextureUtils.fetchImmediateRemoteTexture(textureUrls[1], (id) -> {});
+                tex = TextureUtils.blurredTile;
+            }
+            double drawX = (divX + 1 - tileX) * drawSize - viewX;
+            double drawZ = (divZ + 0 - tileZ) * drawSize - viewZ;
             context.pose().pushMatrix();
             context.pose().translate((float) (topLeftX + drawX), (float) (topLeftZ + drawZ));
-            context.blit(RenderPipelines.GUI_TEXTURED, textureLocations[1], 0, 0, 0, 0, minimapTileSize,
-                    minimapTileSize, minimapTileSize, minimapTileSize);
+            context.blit(RenderPipelines.GUI_TEXTURED, tex, 0, 0, 0, 0, drawSize,
+                    drawSize, drawSize, drawSize);
             context.pose().popMatrix();
         }
-        if (textureLocations[2] != null) {
-            double drawX = (divX + 0 - tileX) * minimapTileSize - viewX;
-            double drawZ = (divZ + 1 - tileZ) * minimapTileSize - viewZ;
+        if (textureUrls[2] != null) {
+            ResourceLocation tex = TextureUtils.getCachedTexture(textureUrls[2]);
+            if (tex == null) {
+                TextureUtils.fetchImmediateRemoteTexture(textureUrls[2], (id) -> {});
+                tex = TextureUtils.blurredTile;
+            }
+            double drawX = (divX + 0 - tileX) * drawSize - viewX;
+            double drawZ = (divZ + 1 - tileZ) * drawSize - viewZ;
             context.pose().pushMatrix();
             context.pose().translate((float) (topLeftX + drawX), (float) (topLeftZ + drawZ));
-            context.blit(RenderPipelines.GUI_TEXTURED, textureLocations[2], 0, 0, 0, 0, minimapTileSize,
-                    minimapTileSize, minimapTileSize, minimapTileSize);
+            context.blit(RenderPipelines.GUI_TEXTURED, tex, 0, 0, 0, 0, drawSize,
+                    drawSize, drawSize, drawSize);
             context.pose().popMatrix();
         }
-        if (textureLocations[3] != null) {
-            double drawX = (divX + 1 - tileX) * minimapTileSize - viewX;
-            double drawZ = (divZ + 1 - tileZ) * minimapTileSize - viewZ;
+        if (textureUrls[3] != null) {
+            ResourceLocation tex = TextureUtils.getCachedTexture(textureUrls[3]);
+            if (tex == null) {
+                TextureUtils.fetchImmediateRemoteTexture(textureUrls[3], (id) -> {});
+                tex = TextureUtils.blurredTile;
+            }
+            double drawX = (divX + 1 - tileX) * drawSize - viewX;
+            double drawZ = (divZ + 1 - tileZ) * drawSize - viewZ;
             context.pose().pushMatrix();
             context.pose().translate((float) (topLeftX + drawX), (float) (topLeftZ + drawZ));
-            context.blit(RenderPipelines.GUI_TEXTURED, textureLocations[3], 0, 0, 0, 0, minimapTileSize,
-                    minimapTileSize, minimapTileSize, minimapTileSize);
+            context.blit(RenderPipelines.GUI_TEXTURED, tex, 0, 0, 0, 0, drawSize,
+                    drawSize, drawSize, drawSize);
             context.pose().popMatrix();
         }
         context.disableScissor();

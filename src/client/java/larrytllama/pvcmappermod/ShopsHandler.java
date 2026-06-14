@@ -75,7 +75,7 @@ public class ShopsHandler {
     public static CompletableFuture<Shop[]> shopsByItemAsync(String item) {
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(new URI("https://pvc.coolwebsite.uk/pvc-utils/tradesByItem/" + item))
+                .uri(new URI(NetworkUtils.BASE_URL + "/pvc-utils/tradesByItem/" + item))
                 .GET().build();
             return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
@@ -98,27 +98,27 @@ public class ShopsHandler {
 
     public static CompletableFuture<Shop[]> shopsByPlayerAsync(String username) {
         try {
-            System.out.println("Fetching shops for " + username);
+            LogUtils.debug("Fetching shops for " + username);
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(new URI("https://pvc.coolwebsite.uk/pvc-utils/tradesByPlayer/" + username))
+                .uri(new URI(NetworkUtils.BASE_URL + "/pvc-utils/tradesByPlayer/" + username))
                 .GET().build();
             return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     if (response.statusCode() == 200) {
                         Gson gson = new GsonBuilder().registerTypeAdapter(Shop.class, new ShopDeserializer()).create();
                         Shop[] shops = gson.fromJson(response.body(), Shop[].class);
-                        System.out.println(shops.length);
+                        LogUtils.debug(shops.length);
                         return shops;
                     }
                     return new Shop[0];
                 })
                 .exceptionally(e -> {
-                    System.out.println(e);
+                    LogUtils.error("Failed to fetch shops by player", e);
                     e.printStackTrace();
                     return new Shop[0];
                 });
         } catch(Exception e) {
-            System.out.println(e);
+            LogUtils.error("Failed to fetch shops by player", e);
             e.printStackTrace();
             return CompletableFuture.completedFuture(new Shop[0]);
         }
@@ -128,7 +128,7 @@ public class ShopsHandler {
     public static CompletableFuture<ShopsPlayerStats> shopsStatsByPlayerAsync(String username) {
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(new URI("https://pvc.coolwebsite.uk/pvc-utils/playerStats/" + username))
+                .uri(new URI(NetworkUtils.BASE_URL + "/pvc-utils/playerStats/" + username))
                 .GET().build();
             return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
@@ -156,10 +156,10 @@ public class ShopsHandler {
 
     public static CompletableFuture<CustomItem[]> getCustomItems() {
         try {
-            System.out.println("Fetching custom item dict from PVC Mapper: https://pvc.coolwebsite.uk/api/v2/custom-items");
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(new URI("https://pvc.coolwebsite.uk/api/v2/custom-items"))
+                .uri(new URI(NetworkUtils.API_V2 + "/custom-items"))
                 .GET().build();
+            LogUtils.debug("Fetching custom item dict from PVC Mapper: " + request.uri().toString());
             return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     if (response.statusCode() == 200) {
@@ -233,7 +233,7 @@ class ShopDeserializer implements JsonDeserializer<Shop> {
 
         JsonObject obj = json.getAsJsonObject();
         Shop shop = new Shop();
-        System.out.println("Applying properties");
+        LogUtils.debug("Applying properties");
         shop.currency = obj.get("currency").getAsString();
         shop.currency2 = obj.get("currency2").isJsonNull() ? null : obj.get("currency2").getAsString();
         shop.customName = obj.get("customName").isJsonNull() ? null : obj.get("customName").getAsString();
@@ -248,22 +248,22 @@ class ShopDeserializer implements JsonDeserializer<Shop> {
         shop.shopOwner = obj.get("shopOwner").getAsString();
         shop.stock = obj.get("stock").getAsInt();
         shop.tradeAmount = obj.get("tradeAmount").getAsInt();
-        System.out.println("Applying enchantments");
+        LogUtils.debug("Applying enchantments");
         // Get enchants as ShopEnchants
         try {
             JsonArray enchants = obj.get("enchants").getAsJsonArray();
             shop.enchants = new ShopEnchants[enchants.size()];
-            System.out.println("Applying " + enchants.size() + " enchantments");
+            LogUtils.debug("Applying " + enchants.size() + " enchantments");
             // Put em all in!
             for (int se = 0; se < enchants.size(); se++) {
                 JsonObject enchant = enchants.get(se).getAsJsonObject();
                 String enchantID = enchant.keySet().iterator().next();
                 int level = enchant.get(enchantID).getAsInt();
-                System.out.println("Parsed enchant - ID: " + enchantID + ", Level: " + level);
+                LogUtils.debug("Parsed enchant - ID: " + enchantID + ", Level: " + level);
                 shop.enchants[se] = new ShopEnchants();
                 shop.enchants[se].id = enchantID;
                 shop.enchants[se].level = level;
-                System.out.println("Set enchant - ID: " + shop.enchants[se].id + ", Level: " + shop.enchants[se].level);
+                LogUtils.debug("Set enchant - ID: " + shop.enchants[se].id + ", Level: " + shop.enchants[se].level);
             }
         } catch(Exception e) {
             shop.enchants = new ShopEnchants[0];

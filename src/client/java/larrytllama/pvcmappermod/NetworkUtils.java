@@ -13,4 +13,9 @@ public class NetworkUtils {
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
+
+    // API Endpoints
+    public static final String BASE_URL = "https://pvc.coolwebsite.uk";
+    public static final String API_V1 = BASE_URL + "/api/v1";
+    public static final String API_V2 = BASE_URL + "/api/v2";
 }

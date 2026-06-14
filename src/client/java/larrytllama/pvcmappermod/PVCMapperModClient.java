@@ -56,6 +56,8 @@ public class PVCMapperModClient implements ClientModInitializer {
     public void onInitializeClient() {
         // Settings provider
         SettingsProvider sp = SettingsProvider.getInstance();
+        sp.updateSettings();
+        
         // Set up player fetchererer
         PlayerFetchUtils pfu = new PlayerFetchUtils();
         new MapperCmdHandler(pfu, this);
@@ -104,7 +106,7 @@ public class PVCMapperModClient implements ClientModInitializer {
                     //   C) You're mean :(
                     // So, eh, please don't. Thanks <3
                     HttpRequest req = HttpRequest.newBuilder()
-                        .uri(URI.create("https://pvc.coolwebsite.uk/api/v2/rank-upload/setPlayerRanks?me=" + Minecraft.getInstance().player.getGameProfile().name()))
+                        .uri(URI.create(NetworkUtils.API_V2 + "/rank-upload/setPlayerRanks?me=" + Minecraft.getInstance().player.getGameProfile().name()))
                         .POST(HttpRequest.BodyPublishers.ofString(jsonString))
                         .header("Content-Type", "application/json")
                         .build();
@@ -113,8 +115,7 @@ public class PVCMapperModClient implements ClientModInitializer {
                     } catch(Exception e) {
                         // No bother, we'll just log to console and ignore!
                         // Who actually cares about HTTP error codes? Nothing wrong with ignoring them! *foreshadowing*
-                        System.out.println("[PVC Mapper Mod] Oh naur! Uploading data to mapper failed. Here's the error:");
-                        System.out.println(e);
+                        LogUtils.error("[PVC Mapper Mod] Oh naur! Uploading data to mapper failed. Here's the error:", e);
                     }
                 });
             }

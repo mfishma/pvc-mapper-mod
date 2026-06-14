@@ -102,7 +102,7 @@ public class ShopsScreen extends Screen {
         searchBtn = new Button.Builder(Component.empty(), (b) -> {
             if(currentSearchMode.equals("item")) this.openWithItem(this.itemSearch.getValue());
             else if(currentSearchMode.equals("username")) this.openWithUsername(this.itemSearch.getValue());
-            else System.out.println("Unknown search mode error");
+            else LogUtils.error("Unknown search mode error");
         }).bounds( this.width - 35, this.height - 35, 20, 20).build();
 
         this.addRenderableWidget(searchBtn);
@@ -115,7 +115,7 @@ public class ShopsScreen extends Screen {
                 minecraft.font.width("Search by: username") + 10, minecraft.font.lineHeight + 10, 
                 Component.literal("Search by"), (btn, value) -> {
                     currentSearchMode = value;
-                    System.out.println(value);
+                    LogUtils.debug(value);
                     switch (value) {
                         case "item":
                             itemSearch.setHint(Component.literal("e.g PLAYTIME_CERTIFICATE"));
@@ -219,16 +219,6 @@ public class ShopsScreen extends Screen {
     ResourceLocation blurredTile = ResourceLocation.fromNamespaceAndPath("pvcmappermod", "textures/gui/tileloading.png");
     ResourceLocation villagerImg = ResourceLocation.fromNamespaceAndPath("pvcmappermod", "textures/gui/villager.png");
 
-    public void fetchTile(int tileX, int tileZ, String dimension) {
-        tiles.put(String.format("%s/8/%d_%d", dimension, tileX, tileZ), blurredTile);
-        // Make a request for the tile
-        String url = String.format("%s%s/8/%d_%d.png",
-            "https://pvc.coolwebsite.uk/maps/", dimension, tileX, tileZ);
-        TextureUtils.fetchImmediateRemoteTexture(url, (id) -> {
-            tiles.put(String.format("%s/8/%d_%d", dimension, tileX, tileZ), id);
-        });
-    }
-
     // Trace meeeee
     public void drawMap(GuiGraphics graphics, int x, int y, int width, int height, int coordX, int coordZ, String dimension) {
         graphics.enableScissor(x, y, x+width, y+height);
@@ -241,13 +231,15 @@ public class ShopsScreen extends Screen {
                 int tileX = ((int)Math.floor(coordX / 512))+ iX -1;
                 int tileZ = ((int)Math.floor(coordZ / 512))+ iZ -1;
 
-                ResourceLocation tile = tiles.get(String.format("%s/8/%d_%d", dimension, tileX, tileZ));
+                String url = String.format("%s%s/8/%d_%d.png", SettingsProvider.getInstance().mapTileSource, dimension, tileX, tileZ);
+                ResourceLocation tile = TextureUtils.getCachedTexture(url);
+                
                 if(tile == null) {
-                    fetchTile(tileX, tileZ, dimension);
-                } else {
-                    graphics.blit(RenderPipelines.GUI_TEXTURED, tile, (512 * iX), (512 * iZ), 0, 0, 512, 512, 512, 512);
+                    TextureUtils.fetchImmediateRemoteTexture(url, (id) -> {});
+                    tile = TextureUtils.blurredTile;
                 }
-
+                
+                graphics.blit(RenderPipelines.GUI_TEXTURED, tile, (512 * iX), (512 * iZ), 0, 0, 512, 512, 512, 512);
             }
         }
         graphics.pose().popMatrix();
@@ -646,7 +638,7 @@ class MyList extends ContainerObjectSelectionList<MyList.Entry> {
                     }
                 }
             } catch(Exception e) {
-                System.out.println(e);
+                LogUtils.error("Error rendering item in list", e);
                 graphics.blit(RenderPipelines.GUI_TEXTURED, UNKNOWN_ITEM, 77, y + 3, 0, 0, 12, 12, 12, 12);
             }
             

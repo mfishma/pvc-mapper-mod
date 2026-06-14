@@ -2,7 +2,6 @@ package larrytllama.pvcmappermod;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Scanner;
 import java.util.concurrent.CompletableFuture;
 
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -149,8 +148,8 @@ public class MapperCmdHandler {
                     return 1;
                 }))
                 .then(ClientCommandManager.literal("clearcache").executes((context) -> {
-                    // Reset image cache
-                    modclient.minimap.textureLocations = new ResourceLocation[4];
+                    // Reset minimap image state
+                    modclient.minimap.textureUrls = new String[4];
                     // Including this one which should never realistically be a value
                     // (Unless PVC's still expanding the map 15000 years later)
                     modclient.minimap.tileCoords = new int[][] {
@@ -159,8 +158,8 @@ public class MapperCmdHandler {
                         { Integer.MIN_VALUE, Integer.MIN_VALUE },
                         { Integer.MIN_VALUE, Integer.MIN_VALUE }
                     };
-                    // And reset the full map menu tiles too :D
-                    modclient.fsm.tiles = new HashMap<String, ResourceLocation>();
+                    // Reset the central global tile cache in TextureUtils
+                    TextureUtils.clearCache();
 
                     context.getSource().sendFeedback(Component.literal("Successfully cleared map tile cache (yay!)"));
                     return 1;
