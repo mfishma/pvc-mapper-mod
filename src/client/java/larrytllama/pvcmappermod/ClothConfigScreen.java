@@ -69,7 +69,7 @@ public class ClothConfigScreen extends Screen {
             .setTooltip(Component.literal("Choose where the minimap goes!"))
             .build();
         minimapSettings.addEntry(this.miniMapPos);
-        this.miniMapZoom = entryBuilder.startIntSlider(Component.literal("Minimap Default Zoom"), sp.miniMapZoom, 1, 8)
+        this.miniMapZoom = entryBuilder.startIntSlider(Component.literal("Minimap Default Zoom"), sp.miniMapZoom, 1, 15)
             .setDefaultValue(8) 
             .setTooltip(Component.literal("Set the default zoom level of the minimap (when the server loads)."), Component.literal("8 is the most zoomed in (default)."), Component.literal("1 is the most zoomed out."))
             .build();

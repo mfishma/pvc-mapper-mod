@@ -58,7 +58,9 @@ public class FullScreenMap extends Screen {
         FullScreenMap fsm = new FullScreenMap(title);
         fsm.pfu = pfu;
         fsm.sp = sp;
-        fsm.zoomlevel = sp.miniMapZoom;
+        // We will allow max level 11 on the full screen map but allow minimap to make the most of it all!
+        // (mouse dragging goes weird after that point for some reason. TODO)
+        fsm.zoomlevel = Math.min(11, sp.miniMapZoom); 
         return fsm;
     }
 
@@ -100,7 +102,7 @@ public class FullScreenMap extends Screen {
     private int topLeftX = 0;
     private int topLeftZ = 0;
     public int zoomlevel = 8;
-    public int maxZoomLevel = 9;
+    public int maxZoomLevel = 11;
     public int minZoomLevel = 1;
 
     public int x = 0;

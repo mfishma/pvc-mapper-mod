@@ -409,8 +409,8 @@ public class Minimap {
         }
         boolean tooltipApplied = false;
         Minecraft mc = Minecraft.getInstance();
-        double x = mc.player.getX();
-        double z = mc.player.getZ();
+        double x = mc.player.getBlockX();
+        double z = mc.player.getBlockZ();
         // Calculate tile size from zoom
         int renderZoom = Math.min(8, zoomlevel);
         int renderTileSize = 1 << (17 - renderZoom);

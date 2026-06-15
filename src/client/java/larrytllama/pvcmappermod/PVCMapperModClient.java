@@ -143,7 +143,7 @@ public class PVCMapperModClient implements ClientModInitializer {
             }
 
             while (MINIMAP_ZOOM_IN.consumeClick()) {
-                if (this.minimap.zoomlevel != 8) {
+                if (this.minimap.zoomlevel != 15) {
                     this.minimap.zoomlevel += 1;
                     this.minimap.resetTileImageCache();
                 }
