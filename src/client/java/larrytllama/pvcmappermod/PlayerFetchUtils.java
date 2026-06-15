@@ -293,6 +293,34 @@ public class PlayerFetchUtils {
         }
     }
 
+    public CompletableFuture<Network[]> fetchNetworksAsync() {
+        String url = String.format("%s/fetch/all-networks", NetworkUtils.API_V2);
+        try {
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(new URI(url))
+                .GET().build();
+            LogUtils.debug("Fetching all networks from: " + request.uri().toString());
+            return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() == 200) {
+                        Gson gson = new Gson();
+                        Network[] features = gson.fromJson(response.body(), Network[].class);
+                        return features;
+                    }
+                    return new Network[0];
+                })
+                .exceptionally(e -> {
+                    showToast("Mapper Connect Error", "Check your internet connection?");
+                    LogUtils.error("Failed to fetch networks from PVC Mapper!", e);
+                    return new Network[0];
+                });
+        } catch (Exception e) {
+            showToast("Mapper Connect Error", "Check your internet connection?");
+            LogUtils.error("Failed to fetch networks from PVC Mapper!", e);
+            return CompletableFuture.completedFuture(new Network[0]);
+        }
+    }
+
     private final ResourceLocation SHOP_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
             "textures/map/decorations/orange_banner.png");
     private final ResourceLocation EVENT_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
@@ -684,4 +712,20 @@ class VersionHistory {
     String dateReleased;
     String whatsNew;
     String url;
+}
+
+class NetworkEdges {
+    int id;
+    String name;
+    /** 
+     * Needs flipping over. E.g metersToPixels(coords[n][1]), metersToPixels(coords[n][0])
+     */
+    double[][] coords;
+}
+
+class Network {
+    int id;
+    String name;
+    String dimension;
+    NetworkEdges[] edges;
 }
