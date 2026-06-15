@@ -465,6 +465,7 @@ public class PlayerFetchUtils {
 
     public CompletableFuture<SearchResult[]> fetchSearchResultsAsync(String query) {
         try {
+            query = query.replaceAll(" ", "%20"); // Makes /search work with spaces
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                 .uri(new URI(NetworkUtils.API_V2 + "/search/" + query))
                 .GET().build();
