@@ -21,6 +21,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import java.awt.geom.Line2D;
+import java.awt.geom.Rectangle2D;
+
 import org.lwjgl.glfw.GLFW;
 
 import com.mojang.authlib.GameProfile;
@@ -54,6 +57,7 @@ public class FullScreenMap extends Screen {
     public ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
     private boolean isMouseDown = false;
     public SettingsProvider sp;
+    public Network[] allNetworks = new Network[0];
     public static FullScreenMap createScreen(Component title, PlayerFetchUtils pfu, SettingsProvider sp) {
         FullScreenMap fsm = new FullScreenMap(title);
         fsm.pfu = pfu;
@@ -61,8 +65,14 @@ public class FullScreenMap extends Screen {
         // We will allow max level 11 on the full screen map but allow minimap to make the most of it all!
         // (mouse dragging goes weird after that point for some reason. TODO)
         fsm.zoomlevel = Math.min(11, sp.miniMapZoom); 
+
+        pfu.fetchNetworksAsync().thenAccept(networks -> {
+            fsm.allNetworks = networks;
+        });
+
         return fsm;
     }
+
 
     public FullScreenMap(Component title) {
         super(title);
@@ -221,6 +231,8 @@ public class FullScreenMap extends Screen {
                 }
                 isChangingFeatures = false;
             });
+        
+        recalculateNetworks();
     }
 
     @Override
@@ -351,6 +363,7 @@ public class FullScreenMap extends Screen {
         int newZoomLevel = zoomlevel;
         executor.schedule(() -> {
             if(newZoomLevel == zoomlevel) {
+                recalculateNetworks();
                 onMouseMove(x, z);
                 resetClaims();
             }
@@ -510,7 +523,7 @@ public class FullScreenMap extends Screen {
                 y + TooltipRenderUtil.PADDING_TOP, 40, 8, 8, 8, 64, 64);
     }
 
-    // Fills in each pixel x0/y0 - x1/y1 
+    // Improved drawLine
     public static void drawLine(GuiGraphics g, int x0, int y0, int x1, int y1, int color) {
         int dx = Math.abs(x1 - x0);
         int dy = Math.abs(y1 - y0);
@@ -518,12 +531,42 @@ public class FullScreenMap extends Screen {
         int sy = y0 < y1 ? 1 : -1;
         int err = dx - dy;
 
+        int currentY = y0;
+        int lineMinX = x0;
+        int lineMaxX = x0;
+
         while (true) {
-            g.fill(x0, y0, x0 + 1, y0 + 1, color);
-            if (x0 == x1 && y0 == y1) break;
             int e2 = err * 2;
+
             if (e2 > -dy) { err -= dy; x0 += sx; }
             if (e2 < dx)  { err += dx; y0 += sy; }
+
+            // If Y changed, draw the accumulated scanline before moving on
+            if (y0 != currentY) {
+                drawScanline(g, lineMinX, lineMaxX, currentY, color);
+                currentY = y0;
+                lineMinX = x0;
+                lineMaxX = x0;
+            } else {
+                // Still on same Y, accumulate X
+                lineMinX = Math.min(lineMinX, x0);
+                lineMaxX = Math.max(lineMaxX, x0);
+            }
+
+            if (x0 == x1 && y0 == y1) {
+                // Draw final scanline
+                drawScanline(g, lineMinX, lineMaxX, currentY, color);
+                break;
+            }
+        }
+    }
+
+    private static void drawScanline(GuiGraphics g, int minX, int maxX, int y, int color) {
+        if (y <= 0 || y >= g.guiHeight()) return;
+        minX = Math.max(minX, 0);
+        maxX = Math.min(maxX, g.guiWidth() - 1);
+        if (minX <= maxX) {
+            g.fill(minX, y, maxX + 1, y + 1, color);
         }
     }
 
@@ -545,7 +588,88 @@ public class FullScreenMap extends Screen {
     // Heh, eng
     private final ResourceLocation ENG = ResourceLocation.fromNamespaceAndPath("minecraft", "the_end");
 
+    public boolean doesIntersect(double x1, double y1, double x2, double y2, double boxX, double boxY, double boxWidth, double boxHeight) {
+        Rectangle2D rect = new Rectangle2D.Double(boxX, boxY, boxWidth, boxHeight);
+        Line2D line = new Line2D.Double(x1, y1, x2, y2);
+                                        
+        // intersectsLine checks both endpoint containment and edge crossings automatically
+        return rect.intersectsLine(line);
+    }
+
+    public int networkTypeToColour(String type) {
+        switch (type) {
+            case "ice":
+            case "boat":
+                return 0xFF13F2F2;
+            case "rail":
+                return 0xFF000000;
+            case "pathMark":
+            case "pathUnmark":
+                return 0xFFFFFFFF;
+            default:
+                return 0x00000000;
+        }
+    }
+
+    /** Source - https://stackoverflow.com/a/9462757
+    * Posted by Ivan T, modified by community. See post 'Timeline' for change history
+    * Retrieved 2026-06-16, License - CC BY-SA 3.0
+    * (Hell yeah! I'm still using stack overflow)*/
+
+    public double bearing(double lat1, double lon1, double lat2, double lon2){
+        double longitude1 = lon1;
+        double longitude2 = lon2;
+        double latitude1 = Math.toRadians(lat1);
+        double latitude2 = Math.toRadians(lat2);
+        double longDiff= Math.toRadians(longitude2-longitude1);
+        double y= Math.sin(longDiff)*Math.cos(latitude2);
+        double x=Math.cos(latitude1)*Math.sin(latitude2)-Math.sin(latitude1)*Math.cos(latitude2)*Math.cos(longDiff);    
+        return (Math.toDegrees(Math.atan2(y, x))+360)%360;
+    }
+
+
+    public void recalculateNetworks() {
+        int tilesize = 1 << (17 - zoomlevel);
+        double scale = (double) minimapTileSize / tilesize;
+
+        linesToDraw.clear();
+        // For each network
+        for (int i=0;i<allNetworks.length;i++) {
+            if(!allNetworks[i].dimension.equals(currentDimension)) continue;
+            if(zoomlevel < 9 && (allNetworks[i].type.equals("pathMark") || allNetworks[i].type.equals("pathUnmark")) ) continue;
+            for (int street=0;street<allNetworks[i].edges.length;street++) {
+                if(allNetworks[i].edges[street] == null) continue;
+                for (int line=0;line<allNetworks[i].edges[street].coords.length-1;line++) {
+                    double[] startPoint = allNetworks[i].edges[street].coords[line];
+                    double[] endPoint = allNetworks[i].edges[street].coords[line + 1];
+                    if(endPoint == null) continue;
+                    if(doesIntersect(metersToPixels(startPoint[1]), metersToPixels(startPoint[0]), metersToPixels(endPoint[1]), metersToPixels(endPoint[0]), x, z, (this.width / scale), ((this.height - bottomMapOffset) / scale) )) {
+                        // Calc where to draw the lines
+                        double[][] linePoints = new double[][]{ 
+                            new double[]{ (metersToPixels(startPoint[1]) - x) * scale, (metersToPixels(startPoint[0]) - z) * scale}, 
+                            new double[]{ (metersToPixels(endPoint[1]) - x) * scale, (metersToPixels(endPoint[0]) - z) * scale}
+                        };
+                        linesToDraw.add(
+                            new NetworkConverted(
+                                linePoints, 
+                                allNetworks[i].edges[street].name, 
+                                networkTypeToColour(allNetworks[i].type), 
+                                minecraft.font.width(allNetworks[i].edges[street].name),
+                                bearing(startPoint[1], startPoint[0], endPoint[1], endPoint[0])
+                            )
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    public ArrayList<NetworkConverted> linesToDraw = new ArrayList<NetworkConverted>();
+
     public String currentDimension = getDimensionID();
+
+    int lastX = 0;
+    int lastZ = 0;
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
@@ -695,6 +819,50 @@ public class FullScreenMap extends Screen {
                             drawSize, drawSize // texturewidth/textureheight
                     );
                     context.pose().popMatrix();
+                }
+            }
+
+            // Draw networks first
+            if(this.lastX != this.x || this.lastZ != this.z) {
+                recalculateNetworks();
+            }
+            this.lastX = this.x;
+            this.lastZ = this.z;
+            for (int i = 0; i < linesToDraw.size(); i++) {
+                drawLine(context, (int)linesToDraw.get(i).coords[0][0], (int)linesToDraw.get(i).coords[0][1], (int)linesToDraw.get(i).coords[1][0], (int)linesToDraw.get(i).coords[1][1], linesToDraw.get(i).colour);
+            }
+
+            int networkLinePadding = 75;
+
+            // Draw street names on top
+            if(zoomlevel > 9) {
+                for (int i = 0; i<linesToDraw.size();i++) {
+                    NetworkConverted line = linesToDraw.get(i);
+                    int nameLength = minecraft.font.width(line.streetName) / 2;
+                    double[][] coords = line.coords;
+
+                    // Figure out how many we can fit along, with padding on either side.
+                    int numberToDraw = (int)Math.floor(
+                        Math.sqrt( 
+                            Math.pow(
+                                Math.max(coords[0][1], coords[1][1]) - Math.min(coords[1][1], coords[0][1]), 
+                            (double)(2)) + Math.pow(
+                                Math.max(coords[1][0], coords[0][0]) - Math.min(coords[1][0], coords[0][0]),
+                            (double)(2))
+                        ) / (nameLength + (networkLinePadding) / scale));
+                    
+                    while(numberToDraw > 0) {
+                        context.pose().pushMatrix();
+                        context.pose().translate((float) (coords[0][0]), (float) (coords[0][1]));
+                        context.pose().rotate((float)Math.toRadians(line.lineBearing));
+                        context.pose().translate((float)(numberToDraw * (networkLinePadding + (line.nameWidth / 2))), 0);
+                        context.pose().rotate(-(float)Math.toRadians(line.lineBearing));
+                        context.pose().scale((float) 0.5, (float) 0.5);
+                        context.fill(-(line.nameWidth / 2) - 2, -2, (line.nameWidth / 2) + 2, minecraft.font.lineHeight + 2, 0x80000000);
+                        context.drawCenteredString(minecraft.font, line.streetName, 0, 0, 0xFFFFFFFF);
+                        context.pose().popMatrix();
+                        numberToDraw-=1;
+                    }
                 }
             }
 
@@ -1052,5 +1220,21 @@ public class FullScreenMap extends Screen {
         this.addRenderableWidget(searchZoomBtn);
         this.addRenderableWidget(settingsBtn);
 
+    }
+}
+
+class NetworkConverted {
+    String streetName;
+    int nameWidth;
+    double lineBearing;
+    double[][] coords;
+    int colour;
+
+    public NetworkConverted(double[][] coords, String streetName, int colour, int nameWidth, double lineBearing) {
+        this.coords = coords;
+        this.streetName = streetName;
+        this.colour = colour;
+        this.nameWidth = nameWidth;
+        this.lineBearing = lineBearing;
     }
 }

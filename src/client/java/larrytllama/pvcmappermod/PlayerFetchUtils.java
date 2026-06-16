@@ -294,7 +294,7 @@ public class PlayerFetchUtils {
     }
 
     public CompletableFuture<Network[]> fetchNetworksAsync() {
-        String url = String.format("%s/fetch/all-networks", NetworkUtils.API_V2);
+        String url = String.format("%s/fetch/all-networks", NetworkUtils.API_V1);
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                 .uri(new URI(url))
@@ -728,5 +728,6 @@ class Network {
     int id;
     String name;
     String dimension;
+    String type;
     NetworkEdges[] edges;
 }
