@@ -33,6 +33,7 @@ public class ClothConfigScreen extends Screen {
     private BooleanListEntry useDarkTiles;
     private BooleanListEntry collectData;
     private BooleanListEntry debugMode;
+    private BooleanListEntry hideMinimapNetworks;
     private StringListEntry mapTileSource;
     private IntegerSliderEntry miniMapZoom;
     private LongSliderEntry minimapScale;
@@ -53,6 +54,7 @@ public class ClothConfigScreen extends Screen {
             sp.minimapScale = this.minimapScale.getValue() / 100.0;
             sp.collectData = this.collectData.getValue();
             sp.debugMode = this.debugMode.getValue();
+            sp.hideMinimapNetworks = this.hideMinimapNetworks.getValue();
             sp.saveSettings();
         })
         .setTitle(Component.literal("PVC Mapper Mod Settings"));
@@ -64,6 +66,11 @@ public class ClothConfigScreen extends Screen {
             .setTooltip(Component.literal("Hide the minimap from view."))
             .build();
         minimapSettings.addEntry(this.showMinimap);
+        this.hideMinimapNetworks = entryBuilder.startBooleanToggle(Component.literal("Hide Networks"), sp.hideMinimapNetworks)
+            .setDefaultValue(false)
+            .setTooltip(Component.literal("Hide the network lines from the minimap view."))
+            .build();
+        minimapSettings.addEntry(this.hideMinimapNetworks);
         this.miniMapPos = entryBuilder.startEnumSelector(Component.literal("Minimap Position"), MiniMapPositions.class, sp.miniMapPos)
             .setDefaultValue(MiniMapPositions.TOP_RIGHT) 
             .setTooltip(Component.literal("Choose where the minimap goes!"))

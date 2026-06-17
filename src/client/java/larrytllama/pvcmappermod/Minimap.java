@@ -683,8 +683,10 @@ public class Minimap {
         }
         this.lastX = mc.player.getBlockX();
         this.lastZ = mc.player.getBlockZ();
-        for (int i = 0; i < linesToDraw.size(); i++) {
-            drawLine(context, (int)linesToDraw.get(i).coords[0][0] + topLeftZ, (int)linesToDraw.get(i).coords[0][1] + topLeftX, (int)linesToDraw.get(i).coords[1][0] + topLeftZ, (int)linesToDraw.get(i).coords[1][1] + topLeftX, linesToDraw.get(i).colour);
+        if(!sp.hideMinimapNetworks) {
+            for (int i = 0; i < linesToDraw.size(); i++) {
+                drawLine(context, (int)linesToDraw.get(i).coords[0][0] + topLeftZ, (int)linesToDraw.get(i).coords[0][1] + topLeftX, (int)linesToDraw.get(i).coords[1][0] + topLeftZ, (int)linesToDraw.get(i).coords[1][1] + topLeftX, linesToDraw.get(i).colour);
+            }
         }
 
         context.disableScissor();

@@ -39,6 +39,8 @@ public class SettingsProvider {
     public boolean collectData = false;
     
     public boolean debugMode = false;
+    
+    public boolean hideMinimapNetworks = false;
 
     Path path = FabricLoader.getInstance().getConfigDir().resolve("pvcmapper.json");
 
@@ -62,6 +64,7 @@ public class SettingsProvider {
                 checkForUpdates = settingsFromFile.checkForUpdates;
                 collectData = settingsFromFile.collectData;
                 debugMode = settingsFromFile.debugMode;
+                hideMinimapNetworks = settingsFromFile.hideMinimapNetworks;
             } catch(Exception e) {
                 LogUtils.error("Couldn't read settings file", e);
                 new SystemToast(SystemToastId.FILE_DROP_FAILURE, Component.literal("PVC Mapper Settings Error"), Component.literal("Couldn't open the Setting file, check you have permissions to access it!"));
@@ -95,6 +98,7 @@ public class SettingsProvider {
         settingsToSet.checkForUpdates = checkForUpdates;
         settingsToSet.collectData = collectData;
         settingsToSet.debugMode = debugMode;
+        settingsToSet.hideMinimapNetworks = hideMinimapNetworks;
         try {
             LogUtils.debug("Writing to settings!" + path.getParent().toString());
             Files.createDirectories(path.getParent());
@@ -121,6 +125,7 @@ class SettingsJSON {
     boolean checkForUpdates = true;
     boolean collectData = false;
     boolean debugMode = false;
+    boolean hideMinimapNetworks = false;
 }
 
 enum MiniMapPositions {
