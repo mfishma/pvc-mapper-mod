@@ -842,21 +842,27 @@ public class FullScreenMap extends Screen {
                     double[][] coords = line.coords;
 
                     // Figure out how many we can fit along, with padding on either side.
-                    int numberToDraw = (int)Math.floor(
-                        Math.sqrt( 
+                    double lineLength = Math.sqrt( 
                             Math.pow(
                                 Math.max(coords[0][1], coords[1][1]) - Math.min(coords[1][1], coords[0][1]), 
                             (double)(2)) + Math.pow(
                                 Math.max(coords[1][0], coords[0][0]) - Math.min(coords[1][0], coords[0][0]),
                             (double)(2))
-                        ) / (nameLength + (networkLinePadding) / scale));
+                        );
+                    int numberToDraw = (int)Math.floor(lineLength / (nameLength + (networkLinePadding) / scale));
                     
                     while(numberToDraw > 0) {
                         context.pose().pushMatrix();
                         context.pose().translate((float) (coords[0][0]), (float) (coords[0][1]));
                         context.pose().rotate((float)Math.toRadians(line.lineBearing));
+                        if(numberToDraw * (networkLinePadding + (line.nameWidth / 2)) > lineLength) {
+                            context.pose().popMatrix();
+                            numberToDraw -= 1;
+                            continue;
+                        }
                         context.pose().translate((float)(numberToDraw * (networkLinePadding + (line.nameWidth / 2))), 0);
-                        context.pose().rotate(-(float)Math.toRadians(line.lineBearing));
+                        //context.pose().rotate(-(float)Math.toRadians(line.lineBearing));
+                        if(line.lineBearing > 90 && line.lineBearing < 270) context.pose().rotate((float)Math.toRadians(-180));
                         context.pose().scale((float) 0.5, (float) 0.5);
                         context.fill(-(line.nameWidth / 2) - 2, -2, (line.nameWidth / 2) + 2, minecraft.font.lineHeight + 2, 0x80000000);
                         context.drawCenteredString(minecraft.font, line.streetName, 0, 0, 0xFFFFFFFF);
