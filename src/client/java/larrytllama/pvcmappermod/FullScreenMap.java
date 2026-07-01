@@ -258,7 +258,7 @@ public class FullScreenMap extends Screen {
             int tilesize = 1 << (17 - zoomlevel);
             double scale = (double) minimapTileSize / tilesize;
             // Check to see if a thing has been clicked
-            for (int i = 0; i < shownFeatures.length; i++) {
+            for (int i = shownFeatures.length - 1; i >= 0; i--) {
                 if(shownFeatures[i].id == 1) {
                     LogUtils.debug("X/Z: " + ((shownFeatures[i].x - x) * scale) + " / " + ((shownFeatures[i].z - z) * scale));
                 }
@@ -376,6 +376,10 @@ public class FullScreenMap extends Screen {
 
     @Override
     public void mouseMoved(double mouseX, double mouseY) {
+        // Reset hover states before recalculating what's under the cursor
+        hoveredPlaceIndex = -1;
+        hoveredClaimIndex = -1;
+
         int tilesize = 1 << (17 - zoomlevel);
         double scale = (double) minimapTileSize / tilesize;
         if (sponsorBanner != null) {
@@ -390,7 +394,7 @@ public class FullScreenMap extends Screen {
 
         // If mouse is in
         if (mouseY < this.height - bottomMapOffset) {
-            for (int i = 0; i < shownFeatures.length; i++) {
+            for (int i = shownFeatures.length - 1; i >= 0; i--) {
                 if (shownFeatures[i].featureType.equals("area")) {
                     double featureX = (minecraft.font.width(shownFeatures[i].name) * 0.5) / 2;
                     double featureY = (minecraft.font.lineHeight * 0.5) / 2;
@@ -410,10 +414,9 @@ public class FullScreenMap extends Screen {
                         break;
                     }
                 }
-                hoveredPlaceIndex = -1;
             }
             if(hoveredPlaceIndex == -1) {
-                for (int i = 0; i<shownClaims.size(); i++) {
+                for (int i = shownClaims.size() - 1; i >= 0; i--) {
                     ClaimMarkers claim = shownClaims.get(i);
                     if(claim.type.equals("polgyon")) continue;
                     if(mouseX > (claim.points[0].x - x) * scale &&
@@ -424,7 +427,6 @@ public class FullScreenMap extends Screen {
                         hoveredClaimIndex = i;
                         break;
                     }
-                    hoveredClaimIndex = -1;
                 }
 
             }
