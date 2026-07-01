@@ -198,14 +198,6 @@ public class FullScreenMap extends Screen {
 
     public FeatureFetch[] shownFeatures = new FeatureFetch[0];
 
-    private double getScale() {
-            return 1 / Math.pow(2, 8);
-    }
-
-    private double metersToPixels(double num) {
-        return Math.round(num / getScale());
-    }
-
     private boolean isChangingFeatures = false;
     public void resetFeatures() {
         int tilesize = 1 << (17 - zoomlevel);
@@ -224,8 +216,8 @@ public class FullScreenMap extends Screen {
                     if(shownFeatures[i].featureType.equals("area")) {
                         if(shownFeatures[i].bounds == null) continue;
                         for (int bound = 0; bound < shownFeatures[i].bounds.length; bound++) {
-                            shownFeatures[i].bounds[bound][0] = metersToPixels(shownFeatures[i].bounds[bound][0]);
-                            shownFeatures[i].bounds[bound][1] = metersToPixels(shownFeatures[i].bounds[bound][1]);
+                            shownFeatures[i].bounds[bound][0] = MapRenderUtils.metersToPixels(shownFeatures[i].bounds[bound][0]);
+                            shownFeatures[i].bounds[bound][1] = MapRenderUtils.metersToPixels(shownFeatures[i].bounds[bound][1]);
                         }
                     }
                 }
@@ -460,24 +452,7 @@ public class FullScreenMap extends Screen {
     }
 
     public void drawTooltip(GuiGraphics context, List<MutableComponent> content, int x, int y) {
-        int lines = content.size();
-        Font mcfont = Minecraft.getInstance().font;
-        int maxSize = 0;
-        for (int i = 0; i < lines; i++) {
-            int w = mcfont.width(content.get(i));
-            if (w > maxSize) {
-                maxSize = w;
-            }
-        }
-        TooltipRenderUtil.renderTooltipBackground(context, x, y, maxSize, mcfont.lineHeight * lines, null);
-        for (int i = 0; i < lines; i++) {
-            context.drawString(
-                    mcfont,
-                    content.get(i),
-                    x,
-                    y + (i * mcfont.lineHeight),
-                    0xFFFFFFFF, false);
-        }
+        MapRenderUtils.drawTooltipComponent(context, content, x, y);
     }
 
     private String hoverPlayerName;
@@ -485,24 +460,9 @@ public class FullScreenMap extends Screen {
             "textures/entity/player/wide/steve.png");
 
     private void getTooltipPlayer(String uuid, String name) {
-        Minecraft mc = Minecraft.getInstance();
-
-        UUID dashed = UUID.fromString(
-                uuid.substring(0, 8) + "-" +
-                        uuid.substring(8, 12) + "-" +
-                        uuid.substring(12, 16) + "-" +
-                        uuid.substring(16, 20) + "-" +
-                        uuid.substring(20));
-        ResolvableProfile resolvable = ResolvableProfile.createUnresolved(dashed);
-        resolvable.resolveProfile(Minecraft.getInstance().services().profileResolver()).thenAccept((resolvedProfile) -> {
-            CompletableFuture<Optional<PlayerSkin>> skin = mc.getSkinManager().get(resolvedProfile);
-            skin.thenAccept(playerSkin -> {
-                // Fallback to steeeeeeeeeve
-                if (playerSkin.isEmpty()) hoverPlayerFace = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png");
-                else hoverPlayerFace = playerSkin.get().body().texturePath();
-            });
+        PlayerSkinHelper.fetchSkin(uuid, "FullScreenMap", (skin) -> {
+            hoverPlayerFace = skin;
         });
-        
     }
 
     public void drawPlayerTooltip(GuiGraphics context, PlayerFetch player, int x, int y) {
@@ -526,51 +486,6 @@ public class FullScreenMap extends Screen {
     }
 
     // Improved drawLine
-    public static void drawLine(GuiGraphics g, int x0, int y0, int x1, int y1, int color) {
-        int dx = Math.abs(x1 - x0);
-        int dy = Math.abs(y1 - y0);
-        int sx = x0 < x1 ? 1 : -1;
-        int sy = y0 < y1 ? 1 : -1;
-        int err = dx - dy;
-
-        int currentY = y0;
-        int lineMinX = x0;
-        int lineMaxX = x0;
-
-        while (true) {
-            int e2 = err * 2;
-
-            if (e2 > -dy) { err -= dy; x0 += sx; }
-            if (e2 < dx)  { err += dx; y0 += sy; }
-
-            // If Y changed, draw the accumulated scanline before moving on
-            if (y0 != currentY) {
-                drawScanline(g, lineMinX, lineMaxX, currentY, color);
-                currentY = y0;
-                lineMinX = x0;
-                lineMaxX = x0;
-            } else {
-                // Still on same Y, accumulate X
-                lineMinX = Math.min(lineMinX, x0);
-                lineMaxX = Math.max(lineMaxX, x0);
-            }
-
-            if (x0 == x1 && y0 == y1) {
-                // Draw final scanline
-                drawScanline(g, lineMinX, lineMaxX, currentY, color);
-                break;
-            }
-        }
-    }
-
-    private static void drawScanline(GuiGraphics g, int minX, int maxX, int y, int color) {
-        if (y <= 0 || y >= g.guiHeight()) return;
-        minX = Math.max(minX, 0);
-        maxX = Math.min(maxX, g.guiWidth() - 1);
-        if (minX <= maxX) {
-            g.fill(minX, y, maxX + 1, y + 1, color);
-        }
-    }
 
     private int bottomMapOffset = 31;
 
@@ -590,83 +505,14 @@ public class FullScreenMap extends Screen {
     // Heh, eng
     private final ResourceLocation ENG = ResourceLocation.fromNamespaceAndPath("minecraft", "the_end");
 
-    public boolean doesIntersect(double x1, double y1, double x2, double y2, double boxX, double boxY, double boxWidth, double boxHeight) {
-        Rectangle2D rect = new Rectangle2D.Double(boxX, boxY, boxWidth, boxHeight);
-        Line2D line = new Line2D.Double(x1, y1, x2, y2);
-                                        
-        // intersectsLine checks both endpoint containment and edge crossings automatically
-        return rect.intersectsLine(line);
-    }
-
-    public int networkTypeToColour(String type) {
-        switch (type) {
-            case "ice":
-            case "boat":
-                return 0xFF13F2F2;
-            case "rail":
-                return 0xFF000000;
-            case "pathMark":
-            case "pathUnmark":
-                return 0xFFFFFFFF;
-            default:
-                return 0x00000000;
-        }
-    }
-
-    /** Source - https://stackoverflow.com/a/9462757
-    * Posted by Ivan T, modified by community. See post 'Timeline' for change history
-    * Retrieved 2026-06-16, License - CC BY-SA 3.0
-    * (Hell yeah! I'm still using stack overflow)*/
-
-    public double bearing(double lat1, double lon1, double lat2, double lon2){
-        double longitude1 = lon1;
-        double longitude2 = lon2;
-        double latitude1 = Math.toRadians(lat1);
-        double latitude2 = Math.toRadians(lat2);
-        double longDiff= Math.toRadians(longitude2-longitude1);
-        double y= Math.sin(longDiff)*Math.cos(latitude2);
-        double x=Math.cos(latitude1)*Math.sin(latitude2)-Math.sin(latitude1)*Math.cos(latitude2)*Math.cos(longDiff);    
-        return (Math.toDegrees(Math.atan2(y, x))+360)%360;
-    }
-
+    private final NetworkRenderer networkRenderer = new NetworkRenderer();
 
     public void recalculateNetworks() {
         int tilesize = 1 << (17 - zoomlevel);
         double scale = (double) minimapTileSize / tilesize;
 
-        linesToDraw.clear();
-        // For each network
-        for (int i=0;i<allNetworks.length;i++) {
-            if(!allNetworks[i].dimension.equals(currentDimension)) continue;
-            if(zoomlevel < 9 && (allNetworks[i].type.equals("pathMark") || allNetworks[i].type.equals("pathUnmark")) ) continue;
-            for (int street=0;street<allNetworks[i].edges.length;street++) {
-                if(allNetworks[i].edges[street] == null) continue;
-                for (int line=0;line<allNetworks[i].edges[street].coords.length-1;line++) {
-                    double[] startPoint = allNetworks[i].edges[street].coords[line];
-                    double[] endPoint = allNetworks[i].edges[street].coords[line + 1];
-                    if(endPoint == null) continue;
-                    if(doesIntersect(metersToPixels(startPoint[1]), metersToPixels(startPoint[0]), metersToPixels(endPoint[1]), metersToPixels(endPoint[0]), x, z, (this.width / scale), ((this.height - bottomMapOffset) / scale) )) {
-                        // Calc where to draw the lines
-                        double[][] linePoints = new double[][]{ 
-                            new double[]{ (metersToPixels(startPoint[1]) - x) * scale, (metersToPixels(startPoint[0]) - z) * scale}, 
-                            new double[]{ (metersToPixels(endPoint[1]) - x) * scale, (metersToPixels(endPoint[0]) - z) * scale}
-                        };
-                        linesToDraw.add(
-                            new NetworkConverted(
-                                linePoints, 
-                                allNetworks[i].edges[street].name, 
-                                networkTypeToColour(allNetworks[i].type), 
-                                minecraft.font.width(allNetworks[i].edges[street].name),
-                                bearing(startPoint[1], startPoint[0], endPoint[1], endPoint[0])
-                            )
-                        );
-                    }
-                }
-            }
-        }
+        networkRenderer.recalculate(allNetworks, currentDimension, zoomlevel, minimapTileSize, x, z, (this.width / scale), ((this.height - bottomMapOffset) / scale), "FullScreenMap");
     }
-
-    public ArrayList<NetworkConverted> linesToDraw = new ArrayList<NetworkConverted>();
 
     public String currentDimension = getDimensionID();
 
@@ -830,16 +676,17 @@ public class FullScreenMap extends Screen {
             }
             this.lastX = this.x;
             this.lastZ = this.z;
-            for (int i = 0; i < linesToDraw.size(); i++) {
-                drawLine(context, (int)linesToDraw.get(i).coords[0][0], (int)linesToDraw.get(i).coords[0][1], (int)linesToDraw.get(i).coords[1][0], (int)linesToDraw.get(i).coords[1][1], linesToDraw.get(i).colour);
+            for (int i = 0; i < networkRenderer.getLinesToDraw().size(); i++) {
+                NetworkConverted line = networkRenderer.getLinesToDraw().get(i);
+                MapRenderUtils.drawLine(context, (int)line.coords[0][0], (int)line.coords[0][1], (int)line.coords[1][0], (int)line.coords[1][1], line.colour);
             }
 
             int networkLinePadding = 75;
 
             // Draw street names on top
             if(zoomlevel > 9) {
-                for (int i = 0; i<linesToDraw.size();i++) {
-                    NetworkConverted line = linesToDraw.get(i);
+                for (int i = 0; i<networkRenderer.getLinesToDraw().size();i++) {
+                    NetworkConverted line = networkRenderer.getLinesToDraw().get(i);
                     int nameLength = minecraft.font.width(line.streetName) / 2;
                     double[][] coords = line.coords;
 
@@ -916,7 +763,7 @@ public class FullScreenMap extends Screen {
                 for (int bound = 0; bound < boundlength  - 1; bound++) {
                     if( shownFeatures[hoveredPlaceIndex].bounds != null &&
                         shownFeatures[hoveredPlaceIndex].bounds[bound].length == 2
-                    ) drawLine(context,
+                    ) MapRenderUtils.drawLine(context,
                         (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound][1] - x)*scale),
                         (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound][0] - z)*scale),
                         (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound + 1][1] - x)*scale),
@@ -925,7 +772,7 @@ public class FullScreenMap extends Screen {
                     );
                 }
                 // Draw one to connect it back up too
-                if(shownFeatures[hoveredPlaceIndex].bounds.length == boundlength) drawLine(context,
+                if(shownFeatures[hoveredPlaceIndex].bounds.length == boundlength) MapRenderUtils.drawLine(context,
                     (int) ((shownFeatures[hoveredPlaceIndex].bounds[boundlength - 1][1] - x)*scale),
                     (int) ((shownFeatures[hoveredPlaceIndex].bounds[boundlength - 1][0] - z)*scale),
                     (int) ((shownFeatures[hoveredPlaceIndex].bounds[0][1] - x)*scale),
@@ -1230,19 +1077,4 @@ public class FullScreenMap extends Screen {
 
     }
 }
-
-class NetworkConverted {
-    String streetName;
-    int nameWidth;
-    double lineBearing;
-    double[][] coords;
-    int colour;
-
-    public NetworkConverted(double[][] coords, String streetName, int colour, int nameWidth, double lineBearing) {
-        this.coords = coords;
-        this.streetName = streetName;
-        this.colour = colour;
-        this.nameWidth = nameWidth;
-        this.lineBearing = lineBearing;
-    }
-}
+

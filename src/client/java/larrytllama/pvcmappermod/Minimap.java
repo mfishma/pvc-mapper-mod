@@ -215,43 +215,14 @@ public class Minimap {
         } else if(sp.miniMapPos == MiniMapPositions.TOP_LEFT) {
             tooltipX = 100;
         }
-        TooltipRenderUtil.renderTooltipBackground(
-                context,
-                tooltipX,
-                8,
-                maxSize,
-                mcfont.lineHeight * lines,
-                null);
-        for (int i = 0; i < lines; i++) {
-            context.drawString(
-                    mcfont,
-                    tooltipText.get(i),
-                    tooltipX,
-                    8 + (i * mcfont.lineHeight),
-                    0xFFFFFFFF, false);
-        }
+        MapRenderUtils.drawTooltipString(context, tooltipText, tooltipX, 8);
     }
 
     private ResourceLocation playerTooltipSkin = ResourceLocation.fromNamespaceAndPath("minecraft","textures/entity/player/wide/steve.png");;
 
     private void getTooltipPlayer(String uuid, String name) {
-        Minecraft mc = Minecraft.getInstance();
-
-        UUID dashed = UUID.fromString(
-            uuid.substring(0, 8) + "-" +
-            uuid.substring(8, 12) + "-" +
-            uuid.substring(12, 16) + "-" +
-            uuid.substring(16, 20) + "-" +
-            uuid.substring(20)
-        );
-        ResolvableProfile resolvable = ResolvableProfile.createUnresolved(dashed);
-        resolvable.resolveProfile(Minecraft.getInstance().services().profileResolver()).thenAccept((resolvedProfile) -> {
-            CompletableFuture<Optional<PlayerSkin>> skin = mc.getSkinManager().get(resolvedProfile);
-            skin.thenAccept(playerSkin -> {
-                // Fallback to steeeeeeeeeve
-                if (playerSkin.isEmpty()) playerTooltipSkin = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png");
-                else playerTooltipSkin = playerSkin.get().body().texturePath();
-            });
+        PlayerSkinHelper.fetchSkin(uuid, "Minimap", (skin) -> {
+            playerTooltipSkin = skin;
         });
     }
 
@@ -272,23 +243,9 @@ public class Minimap {
         } else if(sp.miniMapPos == MiniMapPositions.TOP_LEFT) {
             tooltipX = 100;
         } else {
-            LogUtils.debug("Whoops no minimap pos: " + sp.miniMapPos);
+            LogUtils.debug("[%s] Whoops no minimap pos: %s", "Minimap", sp.miniMapPos);
         }
-        TooltipRenderUtil.renderTooltipBackground(
-                context,
-                tooltipX,
-                8,
-                maxSize,
-                mcfont.lineHeight * lines,
-                null);
-        for (int i = 0; i < lines; i++) {
-            context.drawString(
-                    mcfont,
-                    tooltipText.get(i),
-                    tooltipX,
-                    8 + (i * mcfont.lineHeight),
-                    0xFFFFFFFF, false);
-        }
+        MapRenderUtils.drawTooltipString(context, tooltipText, tooltipX, 8);
 
         context.blit(RenderPipelines.GUI_TEXTURED, playerTooltipSkin, tooltipX + mcfont.width(text.get(0)) + 1, 8, 8, 8, 8, 8, 64, 64);
         context.blit(RenderPipelines.GUI_TEXTURED, playerTooltipSkin, tooltipX + mcfont.width(text.get(0)) + 1, 8, 40, 8, 8, 8, 64, 64 );
@@ -315,15 +272,7 @@ public class Minimap {
     public String[] spinnerParts = {" |", "/", "-", "\\", " |", "/", "-", "\\"};
     private int spinnerPart = 0;
 
-    public ArrayList<NetworkConverted> linesToDraw = new ArrayList<NetworkConverted>();
-
-    private double getScale() {
-            return 1 / Math.pow(2, 8);
-    }
-
-    private double metersToPixels(double num) {
-        return Math.round(num / getScale());
-    }
+    private final NetworkRenderer networkRenderer = new NetworkRenderer();
 
     public void recalculateNetworks() {
         int tilesize = 1 << (17 - zoomlevel);
@@ -331,115 +280,7 @@ public class Minimap {
         double x = Minecraft.getInstance().player.getBlockX() - ((minimapTileSize/2)/scale);
         double z = Minecraft.getInstance().player.getBlockZ() - ((minimapTileSize/2)/scale);
 
-        linesToDraw.clear();
-        // For each network
-        for (int i=0;i<allNetworks.length;i++) {
-            if(!allNetworks[i].dimension.equals(getDimensionNID())) continue;
-            if(zoomlevel < 9 && (allNetworks[i].type.equals("pathMark") || allNetworks[i].type.equals("pathUnmark")) ) continue;
-            for (int street=0;street<allNetworks[i].edges.length;street++) {
-                if(allNetworks[i].edges[street] == null) continue;
-                for (int line=0;line<allNetworks[i].edges[street].coords.length-1;line++) {
-                    double[] startPoint = allNetworks[i].edges[street].coords[line];
-                    double[] endPoint = allNetworks[i].edges[street].coords[line + 1];
-                    if(endPoint == null) continue;
-                    if(doesIntersect(metersToPixels(startPoint[1]), metersToPixels(startPoint[0]), metersToPixels(endPoint[1]), metersToPixels(endPoint[0]), x, z, (minimapTileSize / scale), ((minimapTileSize) / scale) )) {
-                        // Calc where to draw the lines
-                        double[][] linePoints = new double[][]{ 
-                            new double[]{ (metersToPixels(startPoint[1]) - x) * scale, (metersToPixels(startPoint[0]) - z) * scale}, 
-                            new double[]{ (metersToPixels(endPoint[1]) - x) * scale, (metersToPixels(endPoint[0]) - z) * scale}
-                        };
-                        linesToDraw.add(
-                            new NetworkConverted(
-                                linePoints, 
-                                allNetworks[i].edges[street].name, 
-                                networkTypeToColour(allNetworks[i].type), 
-                                Minecraft.getInstance().font.width(allNetworks[i].edges[street].name),
-                                bearing(startPoint[1], startPoint[0], endPoint[1], endPoint[0])
-                            )
-                        );
-                    }
-                }
-            }
-        }
-    }
-    
-    // Shameless lazy copying over of functions from the Full Screen Map
-    // (This will come back to bite later, but eh who cares?!)
-    public int networkTypeToColour(String type) {
-        switch (type) {
-            case "ice":
-            case "boat":
-                return 0xFF13F2F2;
-            case "rail":
-                return 0xFF000000;
-            case "pathMark":
-            case "pathUnmark":
-                return 0xFFFFFFFF;
-            default:
-                return 0x00000000;
-        }
-    }
-    public double bearing(double lat1, double lon1, double lat2, double lon2){
-        double longitude1 = lon1;
-        double longitude2 = lon2;
-        double latitude1 = Math.toRadians(lat1);
-        double latitude2 = Math.toRadians(lat2);
-        double longDiff= Math.toRadians(longitude2-longitude1);
-        double y= Math.sin(longDiff)*Math.cos(latitude2);
-        double x=Math.cos(latitude1)*Math.sin(latitude2)-Math.sin(latitude1)*Math.cos(latitude2)*Math.cos(longDiff);    
-        return (Math.toDegrees(Math.atan2(y, x))+360)%360;
-    }
-    public boolean doesIntersect(double x1, double y1, double x2, double y2, double boxX, double boxY, double boxWidth, double boxHeight) {
-        Rectangle2D rect = new Rectangle2D.Double(boxX, boxY, boxWidth, boxHeight);
-        Line2D line = new Line2D.Double(x1, y1, x2, y2);
-                                        
-        // intersectsLine checks both endpoint containment and edge crossings automatically
-        return rect.intersectsLine(line);
-    }
-    // Improved drawLine
-    public static void drawLine(GuiGraphics g, int x0, int y0, int x1, int y1, int color) {
-        int dx = Math.abs(x1 - x0);
-        int dy = Math.abs(y1 - y0);
-        int sx = x0 < x1 ? 1 : -1;
-        int sy = y0 < y1 ? 1 : -1;
-        int err = dx - dy;
-
-        int currentY = y0;
-        int lineMinX = x0;
-        int lineMaxX = x0;
-
-        while (true) {
-            int e2 = err * 2;
-
-            if (e2 > -dy) { err -= dy; x0 += sx; }
-            if (e2 < dx)  { err += dx; y0 += sy; }
-
-            // If Y changed, draw the accumulated scanline before moving on
-            if (y0 != currentY) {
-                drawScanline(g, lineMinX, lineMaxX, currentY, color);
-                currentY = y0;
-                lineMinX = x0;
-                lineMaxX = x0;
-            } else {
-                // Still on same Y, accumulate X
-                lineMinX = Math.min(lineMinX, x0);
-                lineMaxX = Math.max(lineMaxX, x0);
-            }
-
-            if (x0 == x1 && y0 == y1) {
-                // Draw final scanline
-                drawScanline(g, lineMinX, lineMaxX, currentY, color);
-                break;
-            }
-        }
-    }
-    private static void drawScanline(GuiGraphics g, int minX, int maxX, int y, int color) {
-        if (y <= 0 || y >= g.guiHeight()) return;
-        minX = Math.max(minX, 0);
-        maxX = Math.min(maxX, g.guiWidth() - 1);
-        if (minX <= maxX) {
-            g.fill(minX, y, maxX + 1, y + 1, color);
-        }
+        networkRenderer.recalculate(allNetworks, getDimensionNID(), zoomlevel, minimapTileSize, x, z, minimapTileSize, minimapTileSize, "Minimap");
     }
 
     private float tickAccumulator = 0f; // Track ticks for stuff
@@ -684,8 +525,9 @@ public class Minimap {
         this.lastX = mc.player.getBlockX();
         this.lastZ = mc.player.getBlockZ();
         if(!sp.hideMinimapNetworks) {
-            for (int i = 0; i < linesToDraw.size(); i++) {
-                drawLine(context, (int)linesToDraw.get(i).coords[0][0] + topLeftZ, (int)linesToDraw.get(i).coords[0][1] + topLeftX, (int)linesToDraw.get(i).coords[1][0] + topLeftZ, (int)linesToDraw.get(i).coords[1][1] + topLeftX, linesToDraw.get(i).colour);
+            for (int i = 0; i < networkRenderer.getLinesToDraw().size(); i++) {
+                NetworkConverted line = networkRenderer.getLinesToDraw().get(i);
+                MapRenderUtils.drawLine(context, (int)line.coords[0][0] + topLeftZ, (int)line.coords[0][1] + topLeftX, (int)line.coords[1][0] + topLeftZ, (int)line.coords[1][1] + topLeftX, line.colour);
             }
         }
 
