@@ -33,11 +33,15 @@ import java.util.List;
 public class ShopsHandler {
     public static SuggestionProvider<FabricClientCommandSource> ITEM_SUGGESTIONS =
     (context, builder) -> {
+        String remaining = builder.getRemaining().toLowerCase(Locale.ROOT);
         for (Item item : BuiltInRegistries.ITEM) {
             ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
             if (id != null) {
-                String suggestion = id.getPath().toUpperCase(Locale.ROOT);
-                builder.suggest(suggestion);
+                String path = id.getPath();
+                if (path.toLowerCase(Locale.ROOT).startsWith(remaining)) {
+                    String suggestion = path.toUpperCase(Locale.ROOT);
+                    builder.suggest(suggestion);
+                }
             }
         }
 
@@ -48,7 +52,9 @@ public class ShopsHandler {
             "QUARRY_EXTRACTOR_FUEL", "NEPERO", "BANK_NOTE", "CADDOZZO", "$LLAMACOIN");
 
         for (String itemString : specialItems) {
-            builder.suggest(itemString);
+            if (itemString.toLowerCase(Locale.ROOT).startsWith(remaining)) {
+                builder.suggest(itemString);
+            }
         }
         return builder.buildFuture();
     };
