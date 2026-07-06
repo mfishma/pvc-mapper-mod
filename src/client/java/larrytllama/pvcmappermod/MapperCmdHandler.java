@@ -30,9 +30,16 @@ public class MapperCmdHandler {
     public MapperCmdHandler(PlayerFetchUtils pfu, PVCMapperModClient modclient) {
         this.pfu = pfu;
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            LogUtils.debug("[PVC Mapper Mod] ClientCommandRegistrationCallback.EVENT triggered");
 
             dispatcher.register(
                 ClientCommandManager.literal("search")
+                .executes(context -> {
+                    Minecraft.getInstance().execute(() -> {
+                        context.getSource().sendError(Component.literal("Please specify a search query!").withStyle(ChatFormatting.RED));
+                    });
+                    return 1;
+                })
                 .then(ClientCommandManager.argument("query", StringArgumentType.greedyString())
                 .executes(context -> {
                     String query = StringArgumentType.getString(context, "query");
@@ -62,6 +69,7 @@ public class MapperCmdHandler {
                                 chatMsg.append(Component.literal(results[i].description + "\n   ").withStyle(Style.EMPTY.withItalic(true)));
                                 chatMsg.append(Component.literal("Type: " + results[i].type));
                                 if (results[i].type.equals("place") || results[i].type.equals("area")) {
+                                    /* TODO: Once the SearchResult API transmits the dimension, use it here instead of defaulting to same-dimension */
                                     chatMsg.append(
                                         Component.literal(" [View on Map]").withStyle(
                                             Style.EMPTY.withClickEvent(new ClickEvent.RunCommand("map " + results[i].x + " " + results[i].z))
@@ -93,16 +101,17 @@ public class MapperCmdHandler {
             dispatcher.register(
                 ClientCommandManager.literal("map")
                 .executes((context) -> {
-                    Minecraft.getInstance().setScreen(null);
-                    Minecraft.getInstance().setScreen(modclient.fsm);
+                    LogUtils.debug("[PVC Mapper Mod] /map command executes called");
+                    PVCMapperModClient.setScreenOnNextTick(modclient.fsm);
                     return 1;
                 })
                 .then(ClientCommandManager.argument("x", IntegerArgumentType.integer())
                     .then(ClientCommandManager.argument("z", IntegerArgumentType.integer())
                         .executes((context) -> {
-                            Minecraft.getInstance().execute(() -> {
-                                Minecraft.getInstance().setScreen(modclient.fsm);
-                                modclient.fsm.navToCoords(IntegerArgumentType.getInteger(context, "x"), IntegerArgumentType.getInteger(context, "z"));
+                            int x = IntegerArgumentType.getInteger(context, "x");
+                            int z = IntegerArgumentType.getInteger(context, "z");
+                            PVCMapperModClient.setScreenOnNextTick(modclient.fsm, () -> {
+                                modclient.fsm.navToCoords(x, z);
                             });
                             return 1;
                         })
@@ -112,12 +121,19 @@ public class MapperCmdHandler {
 
             dispatcher.register(
                 ClientCommandManager.literal("shops")
+                .executes((context) -> {
+                    LogUtils.debug("[PVC Mapper Mod] /shops command executes called");
+                    PVCMapperModClient.setScreenOnNextTick(modclient.shopsScreen);
+                    return 1;
+                })
                 .then(ClientCommandManager.argument("item", StringArgumentType.greedyString()).suggests(ShopsHandler.ITEM_SUGGESTIONS)
                     .executes((context) -> {
                         String item = StringArgumentType.getString(context, "item");
-                        Minecraft.getInstance().setScreen(modclient.shopsScreen);
-                        CompletableFuture.runAsync(() -> {
-                            modclient.shopsScreen.openWithItem(item);
+                        LogUtils.debug("[PVC Mapper Mod] /shops command executes called with item: " + item);
+                        PVCMapperModClient.setScreenOnNextTick(modclient.shopsScreen, () -> {
+                            CompletableFuture.runAsync(() -> {
+                                modclient.shopsScreen.openWithItem(item);
+                            });
                         });
                         return 1;
                     })
@@ -126,25 +142,12 @@ public class MapperCmdHandler {
 
             dispatcher.register(
                 ClientCommandManager.literal("mapper")
+                .executes((context) -> {
+                    sendHelpFeedback(context);
+                    return 1;
+                })
                 .then(ClientCommandManager.literal("help").executes((context) -> {
-                    context.getSource().sendFeedback(
-                        Component.literal("Commands List\n")
-                        .append(Component.literal("/afksince <player>").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
-                            .append(Component.literal(" - Find how long a player has been AFK\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
-                        ).append(Component.literal("/search <query>").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
-                            .append(Component.literal(" - Search the entire PVC Mapper!\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
-                        ).append(Component.literal("/shops <item>").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
-                            .append(Component.literal(" - Search for shops by this item ID\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
-                        ).append(Component.literal("/map [x] [z]").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
-                            .append(Component.literal(" - Open the map screen, optionally to the chosen x/z coords\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
-                        ).append(Component.literal("/mapper clearcache").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
-                            .append(Component.literal(" - Clears the map cache refreshing all tiles\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
-                        ).append(Component.literal("/mapper help").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
-                            .append(Component.literal(" - You can guess what this does\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
-                        ).append(Component.literal("/mapper retryupdates").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
-                            .append(Component.literal(" - Use if the mod stops refreshing players\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
-                        )
-                    );
+                    sendHelpFeedback(context);
                     return 1;
                 }))
                 .then(ClientCommandManager.literal("clearcache").executes((context) -> {
@@ -211,5 +214,26 @@ public class MapperCmdHandler {
                 }))
             );
         });
+    }
+
+    private void sendHelpFeedback(com.mojang.brigadier.context.CommandContext<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource> context) {
+        context.getSource().sendFeedback(
+            Component.literal("Commands List\n")
+            .append(Component.literal("/afksince <player>").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                .append(Component.literal(" - Find how long a player has been AFK\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+            ).append(Component.literal("/search [query]").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                .append(Component.literal(" - Search the entire PVC Mapper!\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+            ).append(Component.literal("/shops [item]").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                .append(Component.literal(" - Search for shops by this item ID (or open the viewer with no arguments)\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+            ).append(Component.literal("/map [x] [z]").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                .append(Component.literal(" - Open the map screen, optionally to the chosen x/z coords\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+            ).append(Component.literal("/mapper clearcache").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                .append(Component.literal(" - Clears the map cache refreshing all tiles\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+            ).append(Component.literal("/mapper help").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                .append(Component.literal(" - You can guess what this does\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+            ).append(Component.literal("/mapper retryupdates").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW))
+                .append(Component.literal(" - Use if the mod stops refreshing players\n").setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)))
+            )
+        );
     }
 }
