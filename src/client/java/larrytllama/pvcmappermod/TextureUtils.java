@@ -1,9 +1,11 @@
 package larrytllama.pvcmappermod;
 
+import larrytllama.pvcmappermod.utils.ResIdentifier;
+
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.resources.ResourceLocation;
+
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,6 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ConcurrentHashMap;
+import larrytllama.pvcmappermod.utils.*;
 
 public class TextureUtils {
     // Limits background tile downloads to prevent Cloudflare rate-limiting.
@@ -49,13 +52,13 @@ public class TextureUtils {
     private static final int MAX_CACHED_TILES = 200;
     
     // LRU Cache for managing memory limit
-    private static final java.util.Map<String, ResourceLocation> tileCache = java.util.Collections.synchronizedMap(
-        new java.util.LinkedHashMap<String, ResourceLocation>(16, 0.75f, true) {
+    private static final java.util.Map<String, ResIdentifier> tileCache = java.util.Collections.synchronizedMap(
+        new java.util.LinkedHashMap<String, ResIdentifier>(16, 0.75f, true) {
             @Override
-            protected boolean removeEldestEntry(java.util.Map.Entry<String, ResourceLocation> eldest) {
+            protected boolean removeEldestEntry(java.util.Map.Entry<String, ResIdentifier> eldest) {
                 if (size() > MAX_CACHED_TILES) {
-                    ResourceLocation id = eldest.getValue();
-                    net.minecraft.client.Minecraft.getInstance().getTextureManager().release(id);
+                    ResIdentifier id = eldest.getValue();
+                    net.minecraft.client.Minecraft.getInstance().getTextureManager().release(id.get());
                     activeTiles.decrementAndGet();
                     return true;
                 }
@@ -67,19 +70,19 @@ public class TextureUtils {
     // Memory Profiling Counter
     public static final java.util.concurrent.atomic.AtomicInteger activeTiles = new java.util.concurrent.atomic.AtomicInteger(0);
     
-    static ResourceLocation blurredTile = ResourceLocation.fromNamespaceAndPath("pvcmappermod","textures/gui/tileloading.png");
+    public static final ResIdentifier blurredTile = ResIdentifier.of("pvcmappermod", "textures/gui/tileloading.png");
 
     private static final ConcurrentHashMap<String, Boolean> pendingFetches = new ConcurrentHashMap<>();
 
     /**
      * Fetches an image from a URL, converts it to a DynamicTexture, registers it,
-     * and returns the ResourceLocation via a callback. Uses the bounded download pool.
+     * and returns the ResourceLocation / Identifier via a callback. Uses the bounded download pool.
      *
      * @param urlString The URL of the image.
      * @param callback  The callback to run when the texture is ready.
      */
-    public static void fetchRemoteTexture(String urlString, Consumer<ResourceLocation> callback) {
-        ResourceLocation cached = tileCache.get(urlString);
+    public static void fetchRemoteTexture(String urlString, Consumer<ResIdentifier> callback) {
+        ResIdentifier cached = tileCache.get(urlString);
         if (cached != null) {
             callback.accept(cached);
             return;
@@ -109,8 +112,8 @@ public class TextureUtils {
      * Instantly fetches an image, bypassing the background tile queue.
      * Intended exclusively for UI elements like POI overlays and banners.
      */
-    public static void fetchImmediateRemoteTexture(String urlString, Consumer<ResourceLocation> callback) {
-        ResourceLocation cached = tileCache.get(urlString);
+    public static void fetchImmediateRemoteTexture(String urlString, Consumer<ResIdentifier> callback) {
+        ResIdentifier cached = tileCache.get(urlString);
         if (cached != null) {
             callback.accept(cached);
             return;
@@ -127,14 +130,14 @@ public class TextureUtils {
         });
     }
 
-    public static ResourceLocation getCachedTexture(String urlString) {
+    public static ResIdentifier getCachedTexture(String urlString) {
         return tileCache.get(urlString);
     }
 
     public static void clearCache() {
         Minecraft.getInstance().execute(() -> {
-            for (ResourceLocation id : tileCache.values()) {
-                Minecraft.getInstance().getTextureManager().release(id);
+            for (ResIdentifier id : tileCache.values()) {
+                Minecraft.getInstance().getTextureManager().release(id.get());
                 activeTiles.decrementAndGet();
             }
             tileCache.clear();
@@ -143,7 +146,7 @@ public class TextureUtils {
         });
     }
 
-    private static void executeFetch(String urlString, Consumer<ResourceLocation> callback) {
+    private static void executeFetch(String urlString, Consumer<ResIdentifier> callback) {
         // Apply Global Stagger to avoid overwhelming the server/Cloudflare with bursts from initialization
         try {
             long now = System.currentTimeMillis();
@@ -201,8 +204,8 @@ public class TextureUtils {
                 String idStr = "remote_" + Integer.toHexString(urlString.hashCode());
                 DynamicTexture dynamicTexture = new DynamicTexture(() -> idStr, finalImage);
                 //dynamicTexture
-                ResourceLocation resourceLocation = ResourceLocation.fromNamespaceAndPath("pvcmappermod", idStr);
-                Minecraft.getInstance().getTextureManager().register(resourceLocation, dynamicTexture);
+                ResIdentifier resourceLocation = ResIdentifier.of("pvcmappermod", idStr);
+                Minecraft.getInstance().getTextureManager().register(resourceLocation.get(), dynamicTexture);
                 tileCache.put(urlString, resourceLocation);
                 
                 int currentTiles = activeTiles.incrementAndGet();
@@ -232,7 +235,7 @@ public class TextureUtils {
     /**
      * Handles Cloudflare "Soft Rate Limits" by applying a backoff and serving a placeholder.
      */
-    private static void handleSoftRateLimit(String urlString, String reason, Consumer<ResourceLocation> callback) {
+    private static void handleSoftRateLimit(String urlString, String reason, Consumer<ResIdentifier> callback) {
         System.err.println("[TextureUtils] Soft Rate Limit Triggered (" + reason + "): " + urlString);
         // Back off for 20 seconds for this specific URL
         failedFetches.put(urlString, System.currentTimeMillis() + 20000);

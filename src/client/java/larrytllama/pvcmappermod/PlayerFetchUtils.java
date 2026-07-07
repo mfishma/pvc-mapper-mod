@@ -1,5 +1,7 @@
 package larrytllama.pvcmappermod;
 
+import larrytllama.pvcmappermod.utils.*;
+
 import java.io.FileNotFoundException;
 import java.lang.reflect.Type;
 import java.net.URI;
@@ -27,7 +29,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+
 
 public class PlayerFetchUtils {
     private ScheduledExecutorService scheduler;
@@ -35,17 +37,17 @@ public class PlayerFetchUtils {
     private ClaimFetch claimsList;
     private ClaimFetch netherClaimsList;
     public boolean claimsFetched = false;
-    public final ResourceLocation THIS_PLAYER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public final ResIdentifier THIS_PLAYER = ResIdentifier.of("minecraft",
             "textures/map/decorations/player.png");
-    public final ResourceLocation OTHER_PLAYERS_OW = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public final ResIdentifier OTHER_PLAYERS_OW = ResIdentifier.of("minecraft",
             "textures/map/decorations/frame.png");
-    public final ResourceLocation OTHER_PLAYERS_NETHER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public final ResIdentifier OTHER_PLAYERS_NETHER = ResIdentifier.of("minecraft",
             "textures/map/decorations/red_marker.png");
-    public final ResourceLocation OTHER_PLAYERS_SOMEWHERE = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public final ResIdentifier OTHER_PLAYERS_SOMEWHERE = ResIdentifier.of("minecraft",
             "textures/map/decorations/blue_marker.png");
 
     public void showToast(String title, String content) {
-        Minecraft.getInstance().getToastManager().addToast(
+        CompatUtils.addToast(
                 new SystemToast(SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
                     Component.literal(title),
                     Component.literal(content)
@@ -321,17 +323,17 @@ public class PlayerFetchUtils {
         }
     }
 
-    private final ResourceLocation SHOP_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    private final ResIdentifier SHOP_BANNER = ResIdentifier.of("minecraft",
             "textures/map/decorations/orange_banner.png");
-    private final ResourceLocation EVENT_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    private final ResIdentifier EVENT_BANNER = ResIdentifier.of("minecraft",
             "textures/map/decorations/magenta_banner.png");
-    private final ResourceLocation LANDMARK_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    private final ResIdentifier LANDMARK_BANNER = ResIdentifier.of("minecraft",
             "textures/map/decorations/yellow_banner.png");
-    private final ResourceLocation BASE_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    private final ResIdentifier BASE_BANNER = ResIdentifier.of("minecraft",
             "textures/map/decorations/light_blue_banner.png");
-    private final ResourceLocation GRAY_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    private final ResIdentifier GRAY_BANNER = ResIdentifier.of("minecraft",
             "textures/map/decorations/light_gray_banner.png");
-    public ResourceLocation getPlaceIcon(String placeType) {
+    public ResIdentifier getPlaceIcon(String placeType) {
         switch (placeType) {
             case "farm":
             case "landmark":
@@ -353,12 +355,12 @@ public class PlayerFetchUtils {
         }
     }
 
-    private final ResourceLocation NETHER_PORTAL =  ResourceLocation.fromNamespaceAndPath("pvcmappermod","textures/gui/portal.png");
-    private final ResourceLocation ENDER_CHEST = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/item/ender_eye.png");
-    private final ResourceLocation TERRA2_PORTAL = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/icon/new_realm.png");
-    private final ResourceLocation UNKNOWN_FEATURE = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/icon/unseen_notification.png");
+    private final ResIdentifier NETHER_PORTAL =  ResIdentifier.of("pvcmappermod","textures/gui/portal.png");
+    private final ResIdentifier ENDER_CHEST = ResIdentifier.of("minecraft", "textures/item/ender_eye.png");
+    private final ResIdentifier TERRA2_PORTAL = ResIdentifier.of("minecraft", "textures/gui/sprites/icon/new_realm.png");
+    private final ResIdentifier UNKNOWN_FEATURE = ResIdentifier.of("minecraft", "textures/gui/sprites/icon/unseen_notification.png");
 
-    public ResourceLocation getPortalIcon(String portalType) {
+    public ResIdentifier getPortalIcon(String portalType) {
         switch (portalType) {
             case "portal":
                 return NETHER_PORTAL;
@@ -522,7 +524,7 @@ public class PlayerFetchUtils {
                                 final String newVersion = vh[i].version;
                                 if(!newVersion.equals(MapperModVersionName)) {
                                     Minecraft.getInstance().execute(() -> {
-                                        Minecraft.getInstance().getToastManager().addToast(new SystemToast(SystemToastId.PERIODIC_NOTIFICATION, Component.literal("PVC Mapper Mod Updates"), Component.literal("v" + newVersion + " now available! See website for details.")));
+                                        CompatUtils.addToast(new SystemToast(SystemToastId.PERIODIC_NOTIFICATION, Component.literal("PVC Mapper Mod Updates"), Component.literal("v" + newVersion + " now available! See website for details.")));
                                     });
                                 }
                                 return;
@@ -530,18 +532,18 @@ public class PlayerFetchUtils {
                         }
                     } else {
                         Minecraft.getInstance().execute(() -> {
-                            Minecraft.getInstance().getToastManager().addToast(new SystemToast(SystemToastId.PERIODIC_NOTIFICATION, Component.literal("PVC Mapper Mod Error"), Component.literal("Check for updates failed.")));
+                            CompatUtils.addToast(new SystemToast(SystemToastId.PERIODIC_NOTIFICATION, Component.literal("PVC Mapper Mod Error"), Component.literal("Check for updates failed.")));
                         });
                     }
                 })
                 .exceptionally(e -> {
                     Minecraft.getInstance().execute(() -> {
-                        Minecraft.getInstance().getToastManager().addToast(new SystemToast(SystemToastId.PERIODIC_NOTIFICATION, Component.literal("PVC Mapper Mod Error"), Component.literal("Check for updates failed.")));
+                        CompatUtils.addToast(new SystemToast(SystemToastId.PERIODIC_NOTIFICATION, Component.literal("PVC Mapper Mod Error"), Component.literal("Check for updates failed.")));
                     });
                     return null;
                 });
         } catch (Exception e) {
-            Minecraft.getInstance().getToastManager().addToast(new SystemToast(SystemToastId.PERIODIC_NOTIFICATION, Component.literal("PVC Mapper Mod Error"), Component.literal("Check for updates failed. The Mapper may be down!")));
+            CompatUtils.addToast(new SystemToast(SystemToastId.PERIODIC_NOTIFICATION, Component.literal("PVC Mapper Mod Error"), Component.literal("Check for updates failed. The Mapper may be down!")));
         }
     }
 }

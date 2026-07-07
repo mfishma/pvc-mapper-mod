@@ -1,4 +1,7 @@
 package larrytllama.pvcmappermod;
+import larrytllama.pvcmappermod.utils.*;
+
+import larrytllama.pvcmappermod.utils.ResIdentifier;
 
 import java.lang.reflect.Type;
 import java.net.URI;
@@ -22,7 +25,6 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 
 import java.util.ArrayList;
@@ -35,7 +37,7 @@ public class ShopsHandler {
     (context, builder) -> {
         String remaining = builder.getRemaining().toLowerCase(Locale.ROOT);
         for (Item item : BuiltInRegistries.ITEM) {
-            ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
+            ResIdentifier id = ResIdentifier.of(BuiltInRegistries.ITEM.getKey(item));
             if (id != null) {
                 String path = id.getPath();
                 if (path.toLowerCase(Locale.ROOT).startsWith(remaining)) {
@@ -68,7 +70,7 @@ public class ShopsHandler {
             "QUARRY_EXTRACTOR_FUEL", "NEPERO", "BANK_NOTE", "CADDOZZO", "$LLAMACOIN"));
 
         for (Item item : BuiltInRegistries.ITEM) {
-            ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
+            ResIdentifier id = ResIdentifier.of(BuiltInRegistries.ITEM.getKey(item));
             if (id != null) {
                 String itemm = id.getPath().toUpperCase(Locale.ROOT);
                 items.add(itemm);
@@ -182,7 +184,8 @@ public class ShopsHandler {
                                 if(preitems[i].new_text[i2].obfuscated != null) newStyle = newStyle.withObfuscated(preitems[i].new_text[i2].obfuscated);
                                 if(preitems[i].new_text[i2].underlined != null) newStyle = newStyle.withUnderlined(preitems[i].new_text[i2].underlined);
                                 if(preitems[i].new_text[i2].strikethrough != null) newStyle = newStyle.withStrikethrough(preitems[i].new_text[i2].strikethrough);
-                                if(preitems[i].new_text[i2].colour != null) newStyle = newStyle.withColor(ChatFormatting.getByName(preitems[i].new_text[i2].colour));
+                                // Enum.valueOf requires an exact uppercase match (unlike the removed getByName method).
+                                if(preitems[i].new_text[i2].colour != null) newStyle = newStyle.withColor(ChatFormatting.valueOf(preitems[i].new_text[i2].colour.toUpperCase()));
                                 // Game is really weird and makes us use it like this:
                                 // Component.literal("").append(Component.literal("First text that's").append(Component.literal("in a different")).append(Component.literal("Colour")))
                                 comp = comp.append(newText.setStyle(newStyle));

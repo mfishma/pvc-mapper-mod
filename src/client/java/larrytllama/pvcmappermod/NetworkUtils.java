@@ -1,5 +1,7 @@
 package larrytllama.pvcmappermod;
 
+import larrytllama.pvcmappermod.utils.*;
+
 import java.net.http.HttpClient;
 import java.time.Duration;
 
@@ -19,3 +21,4 @@ public class NetworkUtils {
     public static final String API_V1 = BASE_URL + "/api/v1";
     public static final String API_V2 = BASE_URL + "/api/v2";
 }
+

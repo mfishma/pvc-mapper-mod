@@ -1,5 +1,7 @@
 package larrytllama.pvcmappermod;
 
+import larrytllama.pvcmappermod.utils.*;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
@@ -7,7 +9,11 @@ import java.util.concurrent.CompletableFuture;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 
+/*? if <26.1 {*/
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+/*?} else {*/
+/*import net.fabricmc.fabric.api.client.command.v2.ClientCommands;*/
+/*?}*/
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -15,7 +21,7 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
+
 
 import java.io.IOException;
 import java.net.URI;
@@ -236,4 +242,15 @@ public class MapperCmdHandler {
             )
         );
     }
+
+    /*? if >=26.1 {*/
+    /*private static class ClientCommandManager {
+        public static com.mojang.brigadier.builder.LiteralArgumentBuilder<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource> literal(String name) {
+            return ClientCommands.literal(name);
+        }
+        public static <T> com.mojang.brigadier.builder.RequiredArgumentBuilder<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource, T> argument(String name, com.mojang.brigadier.arguments.ArgumentType<T> type) {
+            return ClientCommands.argument(name, type);
+        }
+    }*/
+    /*?}*/
 }

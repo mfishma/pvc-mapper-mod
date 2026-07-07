@@ -14,7 +14,7 @@ if (isModern) {
     apply(plugin = "net.fabricmc.fabric-loom-remap")
 }
 
-version = property("mod_version") as String
+version = "${property("mod_version")}+mc${targetVersion}"
 group = property("maven_group") as String
 
 base {
@@ -34,10 +34,7 @@ loom.mods.register("pvc-mapper-mod") {
     sourceSet(sourceSets.getByName("client"))
 }
 
-val fabricApi = project.extensions.getByName<net.fabricmc.fabric.api.loom.FabricApiExtension>("fabricApi")
-fabricApi.configureDataGeneration {
-    client = true
-}
+
 
 dependencies {
     "minecraft"("com.mojang:minecraft:${property("minecraft_version")}")
@@ -46,20 +43,20 @@ dependencies {
         implementation("net.fabricmc:fabric-loader:${property("loader_version")}")
         implementation("net.fabricmc.fabric-api:fabric-api:${property("fabric_version")}")
         
-        api("me.shedaniel.cloth:cloth-config-fabric:${property("cloth_config_version")}") {
+        "implementation"("me.shedaniel.cloth:cloth-config-fabric:${property("cloth_config_version")}") {
             exclude(group = "net.fabricmc.fabric-api")
         }
-        api("com.terraformersmc:modmenu:${property("modmenu_version")}")
+        "implementation"("com.terraformersmc:modmenu:${property("modmenu_version")}")
     } else {
         @Suppress("UnstableApiUsage")
         "mappings"(loom.officialMojangMappings())
         "modImplementation"("net.fabricmc:fabric-loader:${property("loader_version")}")
         "modImplementation"("net.fabricmc.fabric-api:fabric-api:${property("fabric_version")}")
         
-        "modApi"("me.shedaniel.cloth:cloth-config-fabric:${property("cloth_config_version")}") {
+        "modImplementation"("me.shedaniel.cloth:cloth-config-fabric:${property("cloth_config_version")}") {
             exclude(group = "net.fabricmc.fabric-api")
         }
-        "modApi"("com.terraformersmc:modmenu:${property("modmenu_version")}")
+        "modImplementation"("com.terraformersmc:modmenu:${property("modmenu_version")}")
     }
 }
 
@@ -68,7 +65,8 @@ tasks.processResources {
 
     filesMatching("fabric.mod.json") {
         expand(mutableMapOf(
-            "version" to project.version
+            "version" to project.version,
+            "minecraft_version" to project.property("minecraft_version")
         ))
     }
 }
@@ -79,7 +77,7 @@ tasks.withType<JavaCompile>().configureEach {
 
 java {
     withSourcesJar()
-    toolchain.languageVersion.set(JavaLanguageVersion.of(javaVer))
+    toolchain.languageVersion.set(JavaLanguageVersion.of(25))
 }
 
 tasks.jar {

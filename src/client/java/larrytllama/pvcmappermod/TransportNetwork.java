@@ -3,19 +3,35 @@ package larrytllama.pvcmappermod;
 import net.minecraft.client.Minecraft;
 import java.util.ArrayList;
 
-public class NetworkRenderer {
+public class TransportNetwork {
     
-    private final ArrayList<NetworkConverted> linesToDraw = new ArrayList<>();
+    public static class Segment {
+        public String streetName;
+        public int nameWidth;
+        public double lineBearing;
+        public double[][] coords;
+        public int colour;
 
-    public ArrayList<NetworkConverted> getLinesToDraw() {
-        return linesToDraw;
+        public Segment(double[][] coords, String streetName, int colour, int nameWidth, double lineBearing) {
+            this.coords = coords;
+            this.streetName = streetName;
+            this.colour = colour;
+            this.nameWidth = nameWidth;
+            this.lineBearing = lineBearing;
+        }
+    }
+
+    private final ArrayList<Segment> segments = new ArrayList<>();
+
+    public ArrayList<Segment> getSegments() {
+        return segments;
     }
 
     public void recalculate(Network[] allNetworks, String currentDimension, int zoomlevel, int tileSizePx, double mapX, double mapZ, double mapWidth, double mapHeight, String source) {
         int tilesize = 1 << (17 - zoomlevel);
         double scale = (double) tileSizePx / tilesize;
 
-        linesToDraw.clear();
+        segments.clear();
         
         // For each network
         for (int i=0;i<allNetworks.length;i++) {
@@ -33,8 +49,8 @@ public class NetworkRenderer {
                             new double[]{ (MapRenderUtils.metersToPixels(startPoint[1]) - mapX) * scale, (MapRenderUtils.metersToPixels(startPoint[0]) - mapZ) * scale}, 
                             new double[]{ (MapRenderUtils.metersToPixels(endPoint[1]) - mapX) * scale, (MapRenderUtils.metersToPixels(endPoint[0]) - mapZ) * scale}
                         };
-                        linesToDraw.add(
-                            new NetworkConverted(
+                        segments.add(
+                            new Segment(
                                 linePoints, 
                                 allNetworks[i].edges[street].name, 
                                 MapRenderUtils.networkTypeToColour(allNetworks[i].type, source), 

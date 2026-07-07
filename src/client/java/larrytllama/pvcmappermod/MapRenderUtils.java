@@ -1,6 +1,11 @@
 package larrytllama.pvcmappermod;
 
+import larrytllama.pvcmappermod.utils.*;
+
+//? if <26.1 {
 import net.minecraft.client.gui.GuiGraphics;
+//?} else {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;*///?}
 
 import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
@@ -12,7 +17,12 @@ import net.minecraft.network.chat.Component;
 
 public class MapRenderUtils {
 
-    public static void drawTooltipComponent(GuiGraphics context, List<? extends Component> content, int x, int y) {
+    public static void drawTooltipComponent(
+        //? if <26.1 {
+        GuiGraphics
+        //?} else {
+        /*GuiGraphicsExtractor*///?}
+        context, List<? extends Component> content, int x, int y) {
         int lines = content.size();
         Font mcfont = Minecraft.getInstance().font;
         int maxSize = 0;
@@ -22,18 +32,18 @@ public class MapRenderUtils {
                 maxSize = w;
             }
         }
-        TooltipRenderUtil.renderTooltipBackground(context, x, y, maxSize, mcfont.lineHeight * lines, null);
+        GraphicsHelper.drawTooltipBackground(context, x, y, maxSize, mcfont.lineHeight * lines);
         for (int i = 0; i < lines; i++) {
-            context.drawString(
-                    mcfont,
-                    content.get(i),
-                    x,
-                    y + (i * mcfont.lineHeight),
-                    0xFFFFFFFF, false);
+            GraphicsHelper.drawString(context, mcfont, content.get(i), x, y + (i * mcfont.lineHeight), 0xFFFFFFFF);
         }
     }
 
-    public static void drawTooltipString(GuiGraphics context, List<String> content, int x, int y) {
+    public static void drawTooltipString(
+        //? if <26.1 {
+        GuiGraphics
+        //?} else {
+        /*GuiGraphicsExtractor*///?}
+        context, List<String> content, int x, int y) {
         int lines = content.size();
         Font mcfont = Minecraft.getInstance().font;
         int maxSize = 0;
@@ -43,22 +53,12 @@ public class MapRenderUtils {
                 maxSize = w;
             }
         }
-        TooltipRenderUtil.renderTooltipBackground(
-                context,
-                x,
-                y,
-                maxSize,
-                mcfont.lineHeight * lines,
-                null);
+        GraphicsHelper.drawTooltipBackground(context, x, y, maxSize, mcfont.lineHeight * lines);
         for (int i = 0; i < lines; i++) {
-            context.drawString(
-                    mcfont,
-                    content.get(i),
-                    x,
-                    y + (i * mcfont.lineHeight),
-                    0xFFFFFFFF, false);
+            GraphicsHelper.drawString(context, mcfont, content.get(i), x, y + (i * mcfont.lineHeight), 0xFFFFFFFF);
         }
     }
+
 
     public static double getScale() {
         return 1 / Math.pow(2, 8);
@@ -68,7 +68,29 @@ public class MapRenderUtils {
         return Math.round(num / getScale());
     }
 
-    public static void drawLine(GuiGraphics g, int x0, int y0, int x1, int y1, int color) {
+    /**
+     * Converts a raw world coordinate to the appropriate map tile coordinate.
+     * Safely handles negative coordinate integer division mapping.
+     */
+    public static int worldToTileCoordinate(double worldCoord, int tileSize) {
+        return (int) Math.floorDiv((long) worldCoord, tileSize);
+    }
+
+    /**
+     * Converts a raw world coordinate to the local pixel offset inside its map tile.
+     * Safely handles negative coordinate modulo wrapping.
+     */
+    public static int worldToLocalTileCoordinate(double worldCoord, int tileSize) {
+        return (int) Math.floorMod((long) worldCoord, tileSize);
+    }
+
+    // Improved drawLine
+    public static void drawLine(
+        //? if <26.1 {
+        GuiGraphics
+        //?} else {
+        /*GuiGraphicsExtractor*///?}
+        g, int x0, int y0, int x1, int y1, int color) {
         int dx = Math.abs(x1 - x0);
         int dy = Math.abs(y1 - y0);
         int sx = x0 < x1 ? 1 : -1;
@@ -105,10 +127,21 @@ public class MapRenderUtils {
         }
     }
 
-    private static void drawScanline(GuiGraphics g, int minX, int maxX, int y, int color) {
+    private static void drawScanline(
+        //? if <26.1 {
+        GuiGraphics
+        //?} else {
+        /*GuiGraphicsExtractor*///?}
+        g, int minX, int maxX, int y, int color) {
+        //? if <26.1 {
         if (y <= 0 || y >= g.guiHeight()) return;
+        //?} else {
+        /*if (y <= 0) return;*/
+        //?}
         minX = Math.max(minX, 0);
+        //? if <26.1 {
         maxX = Math.min(maxX, g.guiWidth() - 1);
+        //?}
         if (minX <= maxX) {
             g.fill(minX, y, maxX + 1, y + 1, color);
         }
@@ -129,6 +162,8 @@ public class MapRenderUtils {
             // LogUtils.debug("[%s] Requesting colour for network type: %s", source, type);
         }
         
+        // Brought these over from Full Screen Map and unified them!
+        // This will prevent the biting of butts.
         switch (type) {
             case "ice":
             case "boat":
@@ -158,3 +193,4 @@ public class MapRenderUtils {
         return (Math.toDegrees(Math.atan2(y, x))+360)%360;
     }
 }
+

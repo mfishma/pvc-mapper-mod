@@ -1,8 +1,11 @@
-package larrytllama.pvcmappermod;
+package larrytllama.pvcmappermod.utils;
+
+import larrytllama.pvcmappermod.*;
+
+import larrytllama.pvcmappermod.utils.ResIdentifier;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.PlayerSkin;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.component.ResolvableProfile;
 
 import java.util.Optional;
@@ -12,7 +15,10 @@ import java.util.function.Consumer;
 
 public class PlayerSkinHelper {
 
-    public static void fetchSkin(String uuidStr, String source, Consumer<ResourceLocation> callback) {
+    public static final ResIdentifier DEFAULT_SKIN =
+            ResIdentifier.of("minecraft", "textures/entity/player/wide/steve.png");
+
+    public static void fetchSkin(String uuidStr, String source, Consumer<ResIdentifier> callback) {
         if (SettingsProvider.getInstance().debugMode) {
             LogUtils.debug("[%s] Fetching skin for UUID: %s", source, uuidStr);
         }
@@ -31,13 +37,13 @@ public class PlayerSkinHelper {
                 CompletableFuture<Optional<PlayerSkin>> skin = mc.getSkinManager().get(resolvedProfile);
                 skin.thenAccept(playerSkin -> {
                     // Fallback to steeeeeeeeeve
-                    if (playerSkin.isEmpty()) callback.accept(ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png"));
-                    else callback.accept(playerSkin.get().body().texturePath());
+                    if (playerSkin.isEmpty()) callback.accept(DEFAULT_SKIN);
+                    else callback.accept(ResIdentifier.of(playerSkin.get().body().texturePath()));
                 });
             });
         } catch (Exception e) {
             LogUtils.error("[%s] Failed to parse UUID for skin fetch: %s", source, uuidStr);
-            callback.accept(ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png"));
+            callback.accept(DEFAULT_SKIN);
         }
     }
 }
