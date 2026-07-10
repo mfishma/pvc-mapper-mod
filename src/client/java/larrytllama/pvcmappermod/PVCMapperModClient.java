@@ -51,6 +51,19 @@ public class PVCMapperModClient implements ClientModInitializer {
     public FullScreenMap fsm;
     public ShopsScreen shopsScreen = new ShopsScreen(Component.literal("PVC Mapper - Shops View"));
     public Minimap minimap;
+    // Brigadier commands execute synchronously inside ChatScreen's text field handler.
+    // Setting screen synchronously gets instantly closed/overwritten by the chat screen closing,
+    // so we queue the screen/task to open on the very next client tick instead.
+    private static net.minecraft.client.gui.screens.Screen NEXT_SCREEN = null;
+    private static Runnable NEXT_TICK_TASK = null;
+
+    public static void setScreenOnNextTick(net.minecraft.client.gui.screens.Screen screen) {
+        NEXT_SCREEN = screen;
+    }
+    public static void setScreenOnNextTick(net.minecraft.client.gui.screens.Screen screen, Runnable callback) {
+        NEXT_SCREEN = screen;
+        NEXT_TICK_TASK = callback;
+    }
 
     public boolean isInPVC = false;
 
@@ -162,6 +175,16 @@ public class PVCMapperModClient implements ClientModInitializer {
                 if (this.minimap.zoomlevel != 1) {
                     this.minimap.zoomlevel -= 1;
                     this.minimap.resetTileImageCache();
+                }
+            }
+
+            // Open queued screen or run queued task
+            if (NEXT_SCREEN != null) {
+                client.setScreen(NEXT_SCREEN);
+                NEXT_SCREEN = null;
+                if (NEXT_TICK_TASK != null) {
+                    NEXT_TICK_TASK.run();
+                    NEXT_TICK_TASK = null;
                 }
             }
         });
