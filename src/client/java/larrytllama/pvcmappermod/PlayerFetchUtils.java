@@ -323,6 +323,36 @@ public class PlayerFetchUtils {
         }
     }
 
+    OrwellMuteCases[] omc;
+
+    public CompletableFuture<OrwellMuteCases[]> fetchOrwellMuteCases() {
+        String url = String.format("%s/orwell-mute-data.json", NetworkUtils.BASE_URL);
+        try {
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(new URI(url))
+                .GET().build();
+            LogUtils.debug("Fetching all orwell mute cases from: " + request.uri().toString() + " - Go make him angy!");
+            return NetworkUtils.HTTP_CLIENT.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() == 200) {
+                        Gson gson = new Gson();
+                        OrwellMuteCases[] features = gson.fromJson(response.body(), OrwellMuteCases[].class);
+                        return features;
+                    }
+                    return new OrwellMuteCases[0];
+                })
+                .exceptionally(e -> {
+                    showToast("Mapper Connect Error", "Check your internet connection?");
+                    LogUtils.error("Failed to fetch OrwellMuteCases from PVC Mapper!", e);
+                    return new OrwellMuteCases[0];
+                });
+        } catch (Exception e) {
+            showToast("Mapper Connect Error", "Check your internet connection?");
+            LogUtils.error("Failed to fetch OrwellMuteCases from PVC Mapper!", e);
+            return CompletableFuture.completedFuture(new OrwellMuteCases[0]);
+        }
+    }
+
     private final ResIdentifier SHOP_BANNER = ResIdentifier.of("minecraft",
             "textures/map/decorations/orange_banner.png");
     private final ResIdentifier EVENT_BANNER = ResIdentifier.of("minecraft",
@@ -732,4 +762,11 @@ class Network {
     String dimension;
     String type;
     NetworkEdges[] edges;
+}
+
+class OrwellMuteCases {
+    String includes;
+    String replacewith;
+    String angyreplace;
+    boolean important;
 }
