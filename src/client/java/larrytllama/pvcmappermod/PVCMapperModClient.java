@@ -35,6 +35,10 @@ import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.KeyMapping.Category;
 import net.minecraft.network.chat.Component;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.Style;
 
 public class PVCMapperModClient implements ClientModInitializer {
     public Category MOD_CATEGORY = Category.register(ResIdentifier.of("pvcmappermod", "category").get());
@@ -234,31 +238,50 @@ public class PVCMapperModClient implements ClientModInitializer {
             pfu.stopUpdates();
         });
 
+        MutableComponent[] orwellMessagePrefixes = {
+            Component.empty().withStyle(Style.EMPTY)
+                .append(Component.literal("|").withStyle(Style.EMPTY.withBold(true).withColor(ChatFormatting.GRAY)))
+                .append(Component.literal(" «Bot» ").withStyle(Style.EMPTY.withBold(false).withColor(ChatFormatting.GOLD)))
+                .append(Component.literal("OrwellBeta").withStyle(Style.EMPTY))
+                .append(Component.literal(" › ").withStyle(Style.EMPTY.withColor(ChatFormatting.GRAY))),
+            Component.empty().withStyle(Style.EMPTY)
+                .append(Component.literal(" «Bot» ").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
+                .append(Component.literal("OrwellBeta").withStyle(Style.EMPTY))
+                .append(Component.literal(" › ").withStyle(Style.EMPTY.withColor(ChatFormatting.GRAY))),
+            Component.empty().withStyle(Style.EMPTY)
+                .append(Component.literal("[").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
+                .append(Component.literal("OrwellBeta").withStyle(Style.EMPTY.withColor(ChatFormatting.RED)))
+                .append(Component.literal(" -> ").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
+                .append(Component.literal("me").withStyle(Style.EMPTY.withColor(ChatFormatting.RED)))
+                .append(Component.literal("] ").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
+        };
+
+        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
+            String text = message.getString();
+            if(text.trim().length() == 0) return false;
+            if(sp.orwellMeter == OrwellianMeter.FULL_MUTE || sp.orwellMeter == OrwellianMeter.SMART) {
+                for (int i = 0; i < orwellMessagePrefixes.length; i++) {
+                    if(text.startsWith(orwellMessagePrefixes[i].getString())) {
+                        if( sp.orwellMeter == OrwellianMeter.FULL_MUTE ||
+                           (
+                            sp.orwellMeter == OrwellianMeter.SMART &&
+                            (text.contains("@") && !text.contains(Minecraft.getInstance().player.getPlainTextName()))
+                           )
+                         ) {
+                            return false;
+                           }
+                    }
+                }
+            }
+            return true;
+        });
+
         // Get rid of Orwell to make him angy
         ClientReceiveMessageEvents.MODIFY_GAME.register((message, overlay) -> {
             if(sp.orwellMeter == OrwellianMeter.ALL) return message;
             // Orwell message types:
-            MutableComponent[] orwellMessagePrefixes = {
-                Component.empty().withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("Original message content:\n").append(message))))
-                    .append(Component.literal("|").withStyle(Style.EMPTY.withBold(true).withColor(ChatFormatting.GRAY)))
-                    .append(Component.literal(" «Bot» ").withStyle(Style.EMPTY.withBold(false).withColor(ChatFormatting.GOLD)))
-                    .append(Component.literal("OrwellBeta").withStyle(Style.EMPTY))
-                    .append(Component.literal(" › ").withStyle(Style.EMPTY.withColor(ChatFormatting.GRAY))),
-                Component.empty().withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("Original message content:\n").append(message))))
-                    .append(Component.literal(" «Bot» ").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
-                    .append(Component.literal("OrwellBeta").withStyle(Style.EMPTY))
-                    .append(Component.literal(" › ").withStyle(Style.EMPTY.withColor(ChatFormatting.GRAY))),
-                Component.empty().withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("Original message content:\n").append(message))))
-                    .append(Component.literal("[").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
-                    .append(Component.literal("OrwellBeta").withStyle(Style.EMPTY.withColor(ChatFormatting.RED)))
-                    .append(Component.literal(" -> ").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
-                    .append(Component.literal("me").withStyle(Style.EMPTY.withColor(ChatFormatting.RED)))
-                    .append(Component.literal("] ").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
-            };
+            
             String text = message.getString();
-
-
-            if(text.trim().length() == 0) return null;
 
             int applicablePrefix = -1;
             for (int i = 0; i < orwellMessagePrefixes.length; i++) {
@@ -268,13 +291,10 @@ public class PVCMapperModClient implements ClientModInitializer {
                 }
             }
             if(applicablePrefix != -1) {
-                if(sp.orwellMeter == OrwellianMeter.FULL_MUTE) return null;
                 // If Orwell is mentioning someone, but not us: ignore
                 if(text.contains("@")) {
                     if(text.contains(Minecraft.getInstance().player.getPlainTextName())) {
                         return message;
-                    } else {
-                        return null;
                     }
                 }
                 for (int i = 0; i < pfu.omc.length; i++) {
@@ -288,15 +308,15 @@ public class PVCMapperModClient implements ClientModInitializer {
                                 .replaceAll("%player", Minecraft.getInstance().player.getPlainTextName())
                                 .replaceAll("%otherplayer%", otherplayer);
                             if(pfu.omc[i].important) {
-                                return orwellMessagePrefixes[applicablePrefix].append(Component.literal(outputtext).withStyle(Style.EMPTY));
+                                return orwellMessagePrefixes[applicablePrefix].append(Component.literal(outputtext).withStyle(Style.EMPTY)).withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("Original message content:\n").append(message))));
                             } else {
-                                return Component.literal(outputtext).withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC);
+                                return Component.literal(outputtext).withStyle(Style.EMPTY.withColor(ChatFormatting.DARK_GRAY).withItalic(true).withHoverEvent(new HoverEvent.ShowText(Component.literal("Original message content:\n").append(message))));
                             }
                         } else if(sp.orwellMeter == OrwellianMeter.ANGY) {
                             String outputtext = pfu.omc[i].angyreplace
                                 .replaceAll("%player", Minecraft.getInstance().player.getPlainTextName())
                                 .replaceAll("%otherplayer%", otherplayer);
-                            return orwellMessagePrefixes[applicablePrefix].append(Component.literal(outputtext).withStyle(Style.EMPTY));
+                            return orwellMessagePrefixes[applicablePrefix].append(Component.literal(outputtext).withStyle(Style.EMPTY)).withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("Original message content:\n").append(message))));
                         }
                     }
                 }
