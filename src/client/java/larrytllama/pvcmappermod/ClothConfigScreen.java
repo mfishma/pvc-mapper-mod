@@ -39,6 +39,7 @@ public class ClothConfigScreen extends Screen {
     private LongSliderEntry minimapScale;
     private EnumListEntry<MiniMapPositions> miniMapPos;
     private EnumListEntry<BigMapPos> bigMapPos;
+    private EnumListEntry<OrwellianMeter> orwellMeter;
 
     public Screen getClothConfig(Screen parent) {
         ConfigBuilder builder = ConfigBuilder.create()
@@ -55,6 +56,7 @@ public class ClothConfigScreen extends Screen {
             sp.collectData = this.collectData.getValue();
             sp.debugMode = this.debugMode.getValue();
             sp.hideMinimapNetworks = this.hideMinimapNetworks.getValue();
+            sp.orwellMeter = this.orwellMeter.getValue();
             sp.saveSettings();
         })
         .setTitle(Component.literal("PVC Mapper Mod Settings"));
@@ -88,6 +90,17 @@ public class ClothConfigScreen extends Screen {
         minimapSettings.addEntry(this.minimapScale);
 
         ConfigCategory miscSettings = builder.getOrCreateCategory(Component.literal("Miscellaneous Settings"));
+        this.orwellMeter = entryBuilder.startEnumSelector(Component.literal("Orwell Mute Mode"), OrwellianMeter.class, sp.orwellMeter)
+            .setDefaultValue(OrwellianMeter.SMART)
+            .setTooltip(
+                Component.literal("Quiet OrwellBeta down in chat by different amounts:"), 
+                Component.literal("ALL = Usual chat chaos by Orwell"),
+                Component.literal("SMART = Shortens and grays-out unimportant messages. [Recommended]"),
+                Component.literal("FULL_MUTE = Mute Orwell entirely! You may miss out on important notices"),
+                Component.literal("ANGY = Oh boy, you've upset him now")
+            )
+            .build();
+        miscSettings.addEntry(this.orwellMeter);
         this.mapTileSource = entryBuilder.startTextField(Component.literal("Tile Source"), sp.mapTileSource)
             .setDefaultValue(NetworkUtils.BASE_URL + "/maps/") 
             .setTooltip(Component.literal("Where the PVC Mapper Mod should get its background tiles from."), Component.literal("Important! Your URL must include the / at the end!").withStyle(ChatFormatting.RED), Component.literal("If the default isn't working, try: https://web.peacefulvanilla.club/maps/tiles/"))

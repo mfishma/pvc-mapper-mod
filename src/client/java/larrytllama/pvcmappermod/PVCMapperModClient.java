@@ -21,8 +21,10 @@ import larrytllama.pvcmappermod.mixin.client.TabListMixin;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.PlayerTabOverlay;
@@ -32,6 +34,9 @@ import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.KeyMapping.Category;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
 
 public class PVCMapperModClient implements ClientModInitializer {
@@ -60,6 +65,10 @@ public class PVCMapperModClient implements ClientModInitializer {
         
         // Set up player fetchererer
         PlayerFetchUtils pfu = new PlayerFetchUtils();
+        pfu.fetchOrwellMuteCases().thenAccept((omc) -> {
+            pfu.omc = omc;
+            System.out.println("Fetch orwell mute cases. Let the chaos begin!");
+        });
         new MapperCmdHandler(pfu, this);
         
 
@@ -199,6 +208,78 @@ public class PVCMapperModClient implements ClientModInitializer {
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             pfu.stopUpdates();
+        });
+
+        // Get rid of Orwell to make him angy
+        ClientReceiveMessageEvents.MODIFY_GAME.register((message, overlay) -> {
+            if(sp.orwellMeter == OrwellianMeter.ALL) return message;
+            // Orwell message types:
+            MutableComponent[] orwellMessagePrefixes = {
+                Component.empty().withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("Original message content:\n").append(message))))
+                    .append(Component.literal("|").withStyle(Style.EMPTY.withBold(true).withColor(ChatFormatting.GRAY)))
+                    .append(Component.literal(" «Bot» ").withStyle(Style.EMPTY.withBold(false).withColor(ChatFormatting.GOLD)))
+                    .append(Component.literal("OrwellBeta").withStyle(Style.EMPTY))
+                    .append(Component.literal(" › ").withStyle(Style.EMPTY.withColor(ChatFormatting.GRAY))),
+                Component.empty().withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("Original message content:\n").append(message))))
+                    .append(Component.literal(" «Bot» ").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
+                    .append(Component.literal("OrwellBeta").withStyle(Style.EMPTY))
+                    .append(Component.literal(" › ").withStyle(Style.EMPTY.withColor(ChatFormatting.GRAY))),
+                Component.empty().withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("Original message content:\n").append(message))))
+                    .append(Component.literal("[").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
+                    .append(Component.literal("OrwellBeta").withStyle(Style.EMPTY.withColor(ChatFormatting.RED)))
+                    .append(Component.literal(" -> ").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
+                    .append(Component.literal("me").withStyle(Style.EMPTY.withColor(ChatFormatting.RED)))
+                    .append(Component.literal("] ").withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)))
+            };
+            String text = message.getString();
+
+
+            if(text.trim().length() == 0) return null;
+
+            int applicablePrefix = -1;
+            for (int i = 0; i < orwellMessagePrefixes.length; i++) {
+                if(text.startsWith(orwellMessagePrefixes[i].getString())) {
+                    applicablePrefix = i;
+                    break;
+                }
+            }
+            if(applicablePrefix != -1) {
+                if(sp.orwellMeter == OrwellianMeter.FULL_MUTE) return null;
+                // If Orwell is mentioning someone, but not us: ignore
+                if(text.contains("@")) {
+                    if(text.contains(Minecraft.getInstance().player.getPlainTextName())) {
+                        return message;
+                    } else {
+                        return null;
+                    }
+                }
+                for (int i = 0; i < pfu.omc.length; i++) {
+                    if(text.contains(pfu.omc[i].includes)) {
+                        String otherplayer = "player";
+                        for (String word : text.split("\\s+")) {
+                            if(word.startsWith("@")) otherplayer = word.substring(1);
+                        }
+                        if(sp.orwellMeter == OrwellianMeter.SMART) {
+                            String outputtext = pfu.omc[i].replacewith
+                                .replaceAll("%player", Minecraft.getInstance().player.getPlainTextName())
+                                .replaceAll("%otherplayer%", otherplayer);
+                            if(pfu.omc[i].important) {
+                                return orwellMessagePrefixes[applicablePrefix].append(Component.literal(outputtext).withStyle(Style.EMPTY));
+                            } else {
+                                return Component.literal(outputtext).withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC);
+                            }
+                        } else if(sp.orwellMeter == OrwellianMeter.ANGY) {
+                            String outputtext = pfu.omc[i].angyreplace
+                                .replaceAll("%player", Minecraft.getInstance().player.getPlainTextName())
+                                .replaceAll("%otherplayer%", otherplayer);
+                            return orwellMessagePrefixes[applicablePrefix].append(Component.literal(outputtext).withStyle(Style.EMPTY));
+                        }
+                    }
+                }
+                return message;
+            }
+
+            return message;
         });
     }
 }
