@@ -1,5 +1,7 @@
 package larrytllama.pvcmappermod;
 
+import larrytllama.pvcmappermod.utils.*;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -10,9 +12,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
 import org.lwjgl.glfw.GLFW;
 
 import com.mojang.blaze3d.platform.InputConstants;
@@ -20,8 +19,10 @@ import com.mojang.blaze3d.platform.InputConstants;
 import larrytllama.pvcmappermod.mixin.client.TabListMixin;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+//? if <26.1 {
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+//?} else {
+/*import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;*///?}
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.ChatFormatting;
@@ -34,13 +35,9 @@ import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.KeyMapping.Category;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
 
 public class PVCMapperModClient implements ClientModInitializer {
-    public Category MOD_CATEGORY = Category.register(ResourceLocation.fromNamespaceAndPath("pvcmappermod", "category"));
+    public Category MOD_CATEGORY = Category.register(ResIdentifier.of("pvcmappermod", "category").get());
     public KeyMapping OPEN_MAP = new KeyMapping("pvcmappermod.open_map", GLFW.GLFW_KEY_M, MOD_CATEGORY);
     public KeyMapping OPEN_SHOPS = new KeyMapping("pvcmappermod.open_shops", GLFW.GLFW_KEY_COMMA, MOD_CATEGORY);
     public KeyMapping MINIMAP_ZOOM_IN = new KeyMapping("pvcmappermod.minimap_zoom_in", GLFW.GLFW_KEY_EQUAL,
@@ -143,10 +140,10 @@ public class PVCMapperModClient implements ClientModInitializer {
             }
         }, 0, 60000, TimeUnit.MILLISECONDS );
 
-        OPEN_MAP = KeyBindingHelper.registerKeyBinding(OPEN_MAP);
-        OPEN_SHOPS = KeyBindingHelper.registerKeyBinding(OPEN_SHOPS);
-        MINIMAP_ZOOM_IN = KeyBindingHelper.registerKeyBinding(MINIMAP_ZOOM_IN);
-        MINIMAP_ZOOM_OUT = KeyBindingHelper.registerKeyBinding(MINIMAP_ZOOM_OUT);
+        OPEN_MAP = CompatUtils.registerKey(OPEN_MAP);
+        OPEN_SHOPS = CompatUtils.registerKey(OPEN_SHOPS);
+        MINIMAP_ZOOM_IN = CompatUtils.registerKey(MINIMAP_ZOOM_IN);
+        MINIMAP_ZOOM_OUT = CompatUtils.registerKey(MINIMAP_ZOOM_OUT);
         fsm = FullScreenMap.createScreen(Component.literal("PVC Mapper - Map View"), pfu, sp);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (OPEN_MAP.consumeClick()) {
@@ -156,12 +153,12 @@ public class PVCMapperModClient implements ClientModInitializer {
                     else sp.miniMapEnabled = true;
                     sp.saveSettings();
                 } else { 
-                    Minecraft.getInstance().setScreen(fsm);
+                    CompatUtils.setScreen(fsm);
                 }
             }
 
             while (OPEN_SHOPS.consumeClick()) {
-                Minecraft.getInstance().setScreen(new ShopsScreen(Component.literal("PVC Mapper - Shops View")));
+                CompatUtils.setScreen(new ShopsScreen(Component.literal("PVC Mapper - Shops View")));
             }
 
             while (MINIMAP_ZOOM_IN.consumeClick()) {
@@ -180,7 +177,7 @@ public class PVCMapperModClient implements ClientModInitializer {
 
             // Open queued screen or run queued task
             if (NEXT_SCREEN != null) {
-                client.setScreen(NEXT_SCREEN);
+                CompatUtils.setScreen(client, NEXT_SCREEN);
                 NEXT_SCREEN = null;
                 if (NEXT_TICK_TASK != null) {
                     NEXT_TICK_TASK.run();
@@ -196,7 +193,11 @@ public class PVCMapperModClient implements ClientModInitializer {
             if(inLevelTicks == 40) {
                 inLevelTicks = 0;
                 // Janky AF Terra2 detector with the tab list (of all things)
-                PlayerTabOverlay tabList = Minecraft.getInstance().gui.getTabList();
+                PlayerTabOverlay tabList = Minecraft.getInstance().gui.
+                    //? if >=26.2 {
+                    /*hud.*/
+                    //?}
+                    getTabList();
                 // Check against IP if in server
                 if( Minecraft.getInstance().getConnection().getServerData() != null && 
                     Minecraft.getInstance().getConnection().getServerData().ip.contains("peacefulvanilla.club")) { // Just in case they change the subdomain

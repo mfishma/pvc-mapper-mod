@@ -1,5 +1,9 @@
 package larrytllama.pvcmappermod;
 
+import larrytllama.pvcmappermod.utils.*;
+
+import larrytllama.pvcmappermod.utils.ResIdentifier;
+
 import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
 import java.net.URI;
@@ -23,7 +27,10 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+//? if <26.1 {
 import net.minecraft.client.gui.GuiGraphics;
+//?} else {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;*///?}
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.inventory.tooltip.TooltipRenderUtil;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -32,7 +39,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
+
 import net.minecraft.world.entity.player.PlayerSkin;
 import net.minecraft.world.item.component.ResolvableProfile;
 
@@ -75,8 +82,11 @@ public class Minimap {
             minimap.allNetworks = networks;
         });
         minimap.sp = sp;
+        //? if <26.1 {
         HudElementRegistry.attachElementBefore(VanillaHudElements.STATUS_EFFECTS,
-                ResourceLocation.fromNamespaceAndPath("larrytllama.pvcmappermod", "before_chat"), minimap::render);
+//?} else {
+/*        HudElementRegistry.attachElementBefore(VanillaHudElements.MOB_EFFECTS,*///?}
+                ResIdentifier.of("larrytllama.pvcmappermod", "before_chat").get(), minimap::render);
         return minimap;
     }
 
@@ -151,27 +161,27 @@ public class Minimap {
     public int zoomlevel = 8;
     public int minimapTileSize = 80;
     
-    public static final ResourceLocation PLAYER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public static final ResIdentifier PLAYER = ResIdentifier.of("minecraft",
             "textures/map/decorations/player.png");
-    public static final ResourceLocation OTHER_PLAYERS_OW = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public static final ResIdentifier OTHER_PLAYERS_OW = ResIdentifier.of("minecraft",
             "textures/map/decorations/frame.png");
-    public static final ResourceLocation OTHER_PLAYERS_NETHER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public static final ResIdentifier OTHER_PLAYERS_NETHER = ResIdentifier.of("minecraft",
             "textures/map/decorations/red_marker.png");
-    public static final ResourceLocation OTHER_PLAYERS_SOMEWHERE = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public static final ResIdentifier OTHER_PLAYERS_SOMEWHERE = ResIdentifier.of("minecraft",
             "textures/map/decorations/blue_marker.png");
 
-    public static final ResourceLocation SHOP_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public static final ResIdentifier SHOP_BANNER = ResIdentifier.of("minecraft",
             "textures/map/decorations/orange_banner.png");
-    public static final ResourceLocation EVENT_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public static final ResIdentifier EVENT_BANNER = ResIdentifier.of("minecraft",
             "textures/map/decorations/magenta_banner.png");
-    public static final ResourceLocation LANDMARK_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public static final ResIdentifier LANDMARK_BANNER = ResIdentifier.of("minecraft",
             "textures/map/decorations/yellow_banner.png");
-    public static final ResourceLocation BASE_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public static final ResIdentifier BASE_BANNER = ResIdentifier.of("minecraft",
             "textures/map/decorations/light_blue_banner.png");
-    public static final ResourceLocation GRAY_BANNER = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public static final ResIdentifier GRAY_BANNER = ResIdentifier.of("minecraft",
             "textures/map/decorations/light_gray_banner.png");
 
-    public static final ResourceLocation MAP_BG = ResourceLocation.fromNamespaceAndPath("minecraft",
+    public static final ResIdentifier MAP_BG = ResIdentifier.of("minecraft",
             "textures/gui/menu_background.png");
 
     private String prettyDimensionName(String dimension) {
@@ -190,13 +200,13 @@ public class Minimap {
     }
 
     public String getDimensionNID() {
-        String dimension = "minecraft_" + Minecraft.getInstance().level.dimension().location().getPath();
+        String dimension = "minecraft_" + CompatUtils.getIdentifier(Minecraft.getInstance().level.dimension()).getPath();
         if(isInTerra2 && dimension.equals("minecraft_overworld")) return "minecraft_terra2";
         else if(isInTerra2) return "minecraft_unknown_world";
         return dimension;
     }
 
-    private void renderMinimapTooltip(GuiGraphics context, @Nullable List<String> text) {
+    private void renderMinimapTooltip(/*? if <26.1 {*/GuiGraphics/*?} else {*//*GuiGraphicsExtractor*//*?}*/ context, @Nullable List<String> text) {
         List<String> tooltipText = text == null
                 ? List.of("Move your mouse over an icon on\n the map to see more details!")
                 : text;
@@ -215,47 +225,18 @@ public class Minimap {
         } else if(sp.miniMapPos == MiniMapPositions.TOP_LEFT) {
             tooltipX = 100;
         }
-        TooltipRenderUtil.renderTooltipBackground(
-                context,
-                tooltipX,
-                8,
-                maxSize,
-                mcfont.lineHeight * lines,
-                null);
-        for (int i = 0; i < lines; i++) {
-            context.drawString(
-                    mcfont,
-                    tooltipText.get(i),
-                    tooltipX,
-                    8 + (i * mcfont.lineHeight),
-                    0xFFFFFFFF, false);
-        }
+        MapRenderUtils.drawTooltipString(context, tooltipText, tooltipX, 8);
     }
 
-    private ResourceLocation playerTooltipSkin = ResourceLocation.fromNamespaceAndPath("minecraft","textures/entity/player/wide/steve.png");;
+    private ResIdentifier playerTooltipSkin = ResIdentifier.of("minecraft","textures/entity/player/wide/steve.png");;
 
     private void getTooltipPlayer(String uuid, String name) {
-        Minecraft mc = Minecraft.getInstance();
-
-        UUID dashed = UUID.fromString(
-            uuid.substring(0, 8) + "-" +
-            uuid.substring(8, 12) + "-" +
-            uuid.substring(12, 16) + "-" +
-            uuid.substring(16, 20) + "-" +
-            uuid.substring(20)
-        );
-        ResolvableProfile resolvable = ResolvableProfile.createUnresolved(dashed);
-        resolvable.resolveProfile(Minecraft.getInstance().services().profileResolver()).thenAccept((resolvedProfile) -> {
-            CompletableFuture<Optional<PlayerSkin>> skin = mc.getSkinManager().get(resolvedProfile);
-            skin.thenAccept(playerSkin -> {
-                // Fallback to steeeeeeeeeve
-                if (playerSkin.isEmpty()) playerTooltipSkin = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png");
-                else playerTooltipSkin = playerSkin.get().body().texturePath();
-            });
+        PlayerSkinHelper.fetchSkin(uuid, "Minimap", (skin) -> {
+            playerTooltipSkin = skin;
         });
     }
 
-    private void renderMinimapTooltipPlayer(GuiGraphics context, List<String> text) {
+    private void renderMinimapTooltipPlayer(/*? if <26.1 {*/GuiGraphics/*?} else {*//*GuiGraphicsExtractor*//*?}*/ context, List<String> text) {
         List<String> tooltipText = text;
         int lines = tooltipText.size();
         Font mcfont = Minecraft.getInstance().font;
@@ -272,26 +253,12 @@ public class Minimap {
         } else if(sp.miniMapPos == MiniMapPositions.TOP_LEFT) {
             tooltipX = 100;
         } else {
-            LogUtils.debug("Whoops no minimap pos: " + sp.miniMapPos);
+            LogUtils.debug("[%s] Whoops no minimap pos: %s", "Minimap", sp.miniMapPos);
         }
-        TooltipRenderUtil.renderTooltipBackground(
-                context,
-                tooltipX,
-                8,
-                maxSize,
-                mcfont.lineHeight * lines,
-                null);
-        for (int i = 0; i < lines; i++) {
-            context.drawString(
-                    mcfont,
-                    tooltipText.get(i),
-                    tooltipX,
-                    8 + (i * mcfont.lineHeight),
-                    0xFFFFFFFF, false);
-        }
+        MapRenderUtils.drawTooltipString(context, tooltipText, tooltipX, 8);
 
-        context.blit(RenderPipelines.GUI_TEXTURED, playerTooltipSkin, tooltipX + mcfont.width(text.get(0)) + 1, 8, 8, 8, 8, 8, 64, 64);
-        context.blit(RenderPipelines.GUI_TEXTURED, playerTooltipSkin, tooltipX + mcfont.width(text.get(0)) + 1, 8, 40, 8, 8, 8, 64, 64 );
+        context.blit(RenderPipelines.GUI_TEXTURED, playerTooltipSkin.get(), tooltipX + mcfont.width(text.get(0)) + 1, 8, 8, 8, 8, 8, 64, 64);
+        context.blit(RenderPipelines.GUI_TEXTURED, playerTooltipSkin.get(), tooltipX + mcfont.width(text.get(0)) + 1, 8, 40, 8, 8, 8, 64, 64 );
     }
 
     private String lastDimension = "";
@@ -315,15 +282,7 @@ public class Minimap {
     public String[] spinnerParts = {" |", "/", "-", "\\", " |", "/", "-", "\\"};
     private int spinnerPart = 0;
 
-    public ArrayList<NetworkConverted> linesToDraw = new ArrayList<NetworkConverted>();
-
-    private double getScale() {
-            return 1 / Math.pow(2, 8);
-    }
-
-    private double metersToPixels(double num) {
-        return Math.round(num / getScale());
-    }
+    private final TransportNetwork transportNetwork = new TransportNetwork();
 
     public void recalculateNetworks() {
         int tilesize = 1 << (17 - zoomlevel);
@@ -331,115 +290,7 @@ public class Minimap {
         double x = Minecraft.getInstance().player.getBlockX() - ((minimapTileSize/2)/scale);
         double z = Minecraft.getInstance().player.getBlockZ() - ((minimapTileSize/2)/scale);
 
-        linesToDraw.clear();
-        // For each network
-        for (int i=0;i<allNetworks.length;i++) {
-            if(!allNetworks[i].dimension.equals(getDimensionNID())) continue;
-            if(zoomlevel < 9 && (allNetworks[i].type.equals("pathMark") || allNetworks[i].type.equals("pathUnmark")) ) continue;
-            for (int street=0;street<allNetworks[i].edges.length;street++) {
-                if(allNetworks[i].edges[street] == null) continue;
-                for (int line=0;line<allNetworks[i].edges[street].coords.length-1;line++) {
-                    double[] startPoint = allNetworks[i].edges[street].coords[line];
-                    double[] endPoint = allNetworks[i].edges[street].coords[line + 1];
-                    if(endPoint == null) continue;
-                    if(doesIntersect(metersToPixels(startPoint[1]), metersToPixels(startPoint[0]), metersToPixels(endPoint[1]), metersToPixels(endPoint[0]), x, z, (minimapTileSize / scale), ((minimapTileSize) / scale) )) {
-                        // Calc where to draw the lines
-                        double[][] linePoints = new double[][]{ 
-                            new double[]{ (metersToPixels(startPoint[1]) - x) * scale, (metersToPixels(startPoint[0]) - z) * scale}, 
-                            new double[]{ (metersToPixels(endPoint[1]) - x) * scale, (metersToPixels(endPoint[0]) - z) * scale}
-                        };
-                        linesToDraw.add(
-                            new NetworkConverted(
-                                linePoints, 
-                                allNetworks[i].edges[street].name, 
-                                networkTypeToColour(allNetworks[i].type), 
-                                Minecraft.getInstance().font.width(allNetworks[i].edges[street].name),
-                                bearing(startPoint[1], startPoint[0], endPoint[1], endPoint[0])
-                            )
-                        );
-                    }
-                }
-            }
-        }
-    }
-    
-    // Shameless lazy copying over of functions from the Full Screen Map
-    // (This will come back to bite later, but eh who cares?!)
-    public int networkTypeToColour(String type) {
-        switch (type) {
-            case "ice":
-            case "boat":
-                return 0xFF13F2F2;
-            case "rail":
-                return 0xFF000000;
-            case "pathMark":
-            case "pathUnmark":
-                return 0xFFFFFFFF;
-            default:
-                return 0x00000000;
-        }
-    }
-    public double bearing(double lat1, double lon1, double lat2, double lon2){
-        double longitude1 = lon1;
-        double longitude2 = lon2;
-        double latitude1 = Math.toRadians(lat1);
-        double latitude2 = Math.toRadians(lat2);
-        double longDiff= Math.toRadians(longitude2-longitude1);
-        double y= Math.sin(longDiff)*Math.cos(latitude2);
-        double x=Math.cos(latitude1)*Math.sin(latitude2)-Math.sin(latitude1)*Math.cos(latitude2)*Math.cos(longDiff);    
-        return (Math.toDegrees(Math.atan2(y, x))+360)%360;
-    }
-    public boolean doesIntersect(double x1, double y1, double x2, double y2, double boxX, double boxY, double boxWidth, double boxHeight) {
-        Rectangle2D rect = new Rectangle2D.Double(boxX, boxY, boxWidth, boxHeight);
-        Line2D line = new Line2D.Double(x1, y1, x2, y2);
-                                        
-        // intersectsLine checks both endpoint containment and edge crossings automatically
-        return rect.intersectsLine(line);
-    }
-    // Improved drawLine
-    public static void drawLine(GuiGraphics g, int x0, int y0, int x1, int y1, int color) {
-        int dx = Math.abs(x1 - x0);
-        int dy = Math.abs(y1 - y0);
-        int sx = x0 < x1 ? 1 : -1;
-        int sy = y0 < y1 ? 1 : -1;
-        int err = dx - dy;
-
-        int currentY = y0;
-        int lineMinX = x0;
-        int lineMaxX = x0;
-
-        while (true) {
-            int e2 = err * 2;
-
-            if (e2 > -dy) { err -= dy; x0 += sx; }
-            if (e2 < dx)  { err += dx; y0 += sy; }
-
-            // If Y changed, draw the accumulated scanline before moving on
-            if (y0 != currentY) {
-                drawScanline(g, lineMinX, lineMaxX, currentY, color);
-                currentY = y0;
-                lineMinX = x0;
-                lineMaxX = x0;
-            } else {
-                // Still on same Y, accumulate X
-                lineMinX = Math.min(lineMinX, x0);
-                lineMaxX = Math.max(lineMaxX, x0);
-            }
-
-            if (x0 == x1 && y0 == y1) {
-                // Draw final scanline
-                drawScanline(g, lineMinX, lineMaxX, currentY, color);
-                break;
-            }
-        }
-    }
-    private static void drawScanline(GuiGraphics g, int minX, int maxX, int y, int color) {
-        if (y <= 0 || y >= g.guiHeight()) return;
-        minX = Math.max(minX, 0);
-        maxX = Math.min(maxX, g.guiWidth() - 1);
-        if (minX <= maxX) {
-            g.fill(minX, y, maxX + 1, y + 1, color);
-        }
+        transportNetwork.recalculate(allNetworks, getDimensionNID(), zoomlevel, minimapTileSize, x, z, minimapTileSize, minimapTileSize, "Minimap");
     }
 
     private float tickAccumulator = 0f; // Track ticks for stuff
@@ -447,7 +298,7 @@ public class Minimap {
     int lastX = 0;
     int lastZ = 0;
 
-    public void render(GuiGraphics context, DeltaTracker tickCounter) {
+    public void render(/*? if <26.1 {*/GuiGraphics/*?} else {*//*GuiGraphicsExtractor*//*?}*/ context, DeltaTracker tickCounter) {
         tickAccumulator += tickCounter.getRealtimeDeltaTicks();
         if(!sp.miniMapEnabled) return;
         // Apply scaling
@@ -470,14 +321,14 @@ public class Minimap {
         context.pose().scale((float)(sp.minimapScale), (float)(sp.minimapScale));
         context.pose().translate(-cx, -cy);//this.sp.minimapScale, this.sp.minimapScale);
 
-        context.blit(RenderPipelines.GUI_TEXTURED, MAP_BG, topLeftX - 5, topLeftZ - 5, 0, 0, minimapTileSize + 10,
+        context.blit(RenderPipelines.GUI_TEXTURED, MAP_BG.get(), topLeftX - 5, topLeftZ - 5, 0, 0, minimapTileSize + 10,
                 minimapTileSize + 10, 16, 16);
 
         if(isLoadingIn) {
             Font font = Minecraft.getInstance().font;
-            context.drawCenteredString(font, Component.literal("Loading map"), topLeftX + (minimapTileSize / 2), topLeftZ + (font.lineHeight * 2), 0xFFFFFFFF);
+            GraphicsHelper.drawCenteredString(context, font, Component.literal("Loading map"), topLeftX + (minimapTileSize / 2), topLeftZ + (font.lineHeight * 2), 0xFFFFFFFF);
             if(spinnerPart == 8) spinnerPart = 0;
-            context.drawCenteredString(font, Component.literal("Please Wait " + spinnerParts[spinnerPart]).withStyle(ChatFormatting.BOLD), topLeftX + (minimapTileSize/ 2), topLeftZ + (font.lineHeight * 5), 0xFFFFFFFF);
+            GraphicsHelper.drawCenteredString(context, font, Component.literal("Please Wait " + spinnerParts[spinnerPart]).withStyle(ChatFormatting.BOLD), topLeftX + (minimapTileSize/ 2), topLeftZ + (font.lineHeight * 5), 0xFFFFFFFF);
             if(tickAccumulator >= 10f) {
                 spinnerPart++;
                 tickAccumulator = 0;
@@ -488,10 +339,10 @@ public class Minimap {
 
         if(isInQueue) {
             Font font = Minecraft.getInstance().font;
-            context.drawCenteredString(font, Component.literal("You're in..."), topLeftX + (minimapTileSize / 2), topLeftZ + (font.lineHeight * 2), 0xFFFFFFFF);
-            context.drawCenteredString(font, Component.literal("The Queue").withStyle(ChatFormatting.BOLD), topLeftX + (minimapTileSize / 2), topLeftZ + (font.lineHeight * 3), 0xFFFFFFFF);
+            GraphicsHelper.drawCenteredString(context, font, Component.literal("You're in..."), topLeftX + (minimapTileSize / 2), topLeftZ + (font.lineHeight * 2), 0xFFFFFFFF);
+            GraphicsHelper.drawCenteredString(context, font, Component.literal("The Queue").withStyle(ChatFormatting.BOLD), topLeftX + (minimapTileSize / 2), topLeftZ + (font.lineHeight * 3), 0xFFFFFFFF);
             if(spinnerPart == 8) spinnerPart = 0;
-            context.drawCenteredString(font, Component.literal("Please Wait " + spinnerParts[spinnerPart]).withStyle(ChatFormatting.BOLD), topLeftX + (minimapTileSize/ 2), topLeftZ + (font.lineHeight * 5), 0xFFFFFFFF);
+            GraphicsHelper.drawCenteredString(context, font, Component.literal("Please Wait " + spinnerParts[spinnerPart]).withStyle(ChatFormatting.BOLD), topLeftX + (minimapTileSize/ 2), topLeftZ + (font.lineHeight * 5), 0xFFFFFFFF);
             
             if(tickAccumulator >= 10f) {
                 spinnerPart++;
@@ -503,16 +354,16 @@ public class Minimap {
 
         if(getDimensionNID() == "minecraft_unknown_world") {
             Font font = Minecraft.getInstance().font;
-            context.drawCenteredString(font, Component.literal("No map tiles"), topLeftX + (minimapTileSize/ 2), topLeftZ, 0xFFFFFFFF);
-            context.drawCenteredString(font, Component.literal("available for"), topLeftX + (minimapTileSize/ 2), topLeftZ + font.lineHeight, 0xFFFFFFFF);
-            context.drawCenteredString(font, Component.literal("this world!"), topLeftX + (minimapTileSize/ 2), topLeftZ + (font.lineHeight * 2), 0xFFFFFFFF);
+            GraphicsHelper.drawCenteredString(context, font, Component.literal("No map tiles"), topLeftX + (minimapTileSize/ 2), topLeftZ, 0xFFFFFFFF);
+            GraphicsHelper.drawCenteredString(context, font, Component.literal("available for"), topLeftX + (minimapTileSize/ 2), topLeftZ + font.lineHeight, 0xFFFFFFFF);
+            GraphicsHelper.drawCenteredString(context, font, Component.literal("this world!"), topLeftX + (minimapTileSize/ 2), topLeftZ + (font.lineHeight * 2), 0xFFFFFFFF);
             int textCoordinatesPos = -100;
             if(sp.miniMapPos == MiniMapPositions.TOP_RIGHT) {
                 textCoordinatesPos = screenwidth - 48;
             } else if(sp.miniMapPos == MiniMapPositions.TOP_LEFT) {
                 textCoordinatesPos = 48;
             }
-            context.drawCenteredString(font, String.format("%d, %d, %d", Minecraft.getInstance().player.blockPosition().getX(),
+            GraphicsHelper.drawCenteredString(context, font, String.format("%d, %d, %d", Minecraft.getInstance().player.blockPosition().getX(),
                 Minecraft.getInstance().player.blockPosition().getY(), Minecraft.getInstance().player.blockPosition().getZ()), textCoordinatesPos, 95, 0xFFFFFFFF);
             context.pose().popMatrix();
             return;
@@ -542,8 +393,8 @@ public class Minimap {
         int tilesize = 1 << (17 - zoomlevel);
         // Make sure negative tiles start at -1 not -0
         // -256 to work with our 2x2 grid moving minimap
-        int divX = Math.floorDiv((int) (x) - 256, renderTileSize);
-        int divZ = Math.floorDiv((int) (z) - 256, renderTileSize);
+        int divX = MapRenderUtils.worldToTileCoordinate(x - 256, renderTileSize);
+        int divZ = MapRenderUtils.worldToTileCoordinate(z - 256, renderTileSize);
         if (tileCoords[0][0] != divX || tileCoords[0][1] != divZ) {
             recalculateNetworks();
             // Save ourselves requesting content we already have.
@@ -602,11 +453,11 @@ public class Minimap {
         
         double scale = (double) minimapTileSize / tilesize;
 
-        double tileX = Math.floorDiv((long) x, renderTileSize);
-        double tileZ = Math.floorDiv((long) z, renderTileSize);
+        double tileX = MapRenderUtils.worldToTileCoordinate(x, renderTileSize);
+        double tileZ = MapRenderUtils.worldToTileCoordinate(z, renderTileSize);
 
-        double localX = Math.floorMod((long) x, renderTileSize);
-        double localZ = Math.floorMod((long) z, renderTileSize);
+        double localX = MapRenderUtils.worldToLocalTileCoordinate(x, renderTileSize);
+        double localZ = MapRenderUtils.worldToLocalTileCoordinate(z, renderTileSize);
 
         double offsetX = localX * scale;
         double offsetZ = localZ * scale;
@@ -621,7 +472,7 @@ public class Minimap {
             // topLeftZ-40
             // If I'm stood at 256, 256 this tile will be 0_0.png and be at topLeftX-0,
             // topLeftZ-0
-            ResourceLocation tex = TextureUtils.getCachedTexture(textureUrls[0]);
+            ResIdentifier tex = TextureUtils.getCachedTexture(textureUrls[0]);
             if (tex == null) {
                 TextureUtils.fetchImmediateRemoteTexture(textureUrls[0], (id) -> {});
                 tex = TextureUtils.blurredTile;
@@ -630,12 +481,12 @@ public class Minimap {
             double drawZ = (divZ + 0 - tileZ) * drawSize - viewZ;
             context.pose().pushMatrix();
             context.pose().translate((float) (topLeftX + drawX), (float) (topLeftZ + drawZ));
-            context.blit(RenderPipelines.GUI_TEXTURED, tex, 0, 0, 0, 0, drawSize,
+            context.blit(RenderPipelines.GUI_TEXTURED, tex.get(), 0, 0, 0, 0, drawSize,
                     drawSize, drawSize, drawSize);
             context.pose().popMatrix();
         }
         if (textureUrls[1] != null) {
-            ResourceLocation tex = TextureUtils.getCachedTexture(textureUrls[1]);
+            ResIdentifier tex = TextureUtils.getCachedTexture(textureUrls[1]);
             if (tex == null) {
                 TextureUtils.fetchImmediateRemoteTexture(textureUrls[1], (id) -> {});
                 tex = TextureUtils.blurredTile;
@@ -644,12 +495,12 @@ public class Minimap {
             double drawZ = (divZ + 0 - tileZ) * drawSize - viewZ;
             context.pose().pushMatrix();
             context.pose().translate((float) (topLeftX + drawX), (float) (topLeftZ + drawZ));
-            context.blit(RenderPipelines.GUI_TEXTURED, tex, 0, 0, 0, 0, drawSize,
+            context.blit(RenderPipelines.GUI_TEXTURED, tex.get(), 0, 0, 0, 0, drawSize,
                     drawSize, drawSize, drawSize);
             context.pose().popMatrix();
         }
         if (textureUrls[2] != null) {
-            ResourceLocation tex = TextureUtils.getCachedTexture(textureUrls[2]);
+            ResIdentifier tex = TextureUtils.getCachedTexture(textureUrls[2]);
             if (tex == null) {
                 TextureUtils.fetchImmediateRemoteTexture(textureUrls[2], (id) -> {});
                 tex = TextureUtils.blurredTile;
@@ -658,12 +509,12 @@ public class Minimap {
             double drawZ = (divZ + 1 - tileZ) * drawSize - viewZ;
             context.pose().pushMatrix();
             context.pose().translate((float) (topLeftX + drawX), (float) (topLeftZ + drawZ));
-            context.blit(RenderPipelines.GUI_TEXTURED, tex, 0, 0, 0, 0, drawSize,
+            context.blit(RenderPipelines.GUI_TEXTURED, tex.get(), 0, 0, 0, 0, drawSize,
                     drawSize, drawSize, drawSize);
             context.pose().popMatrix();
         }
         if (textureUrls[3] != null) {
-            ResourceLocation tex = TextureUtils.getCachedTexture(textureUrls[3]);
+            ResIdentifier tex = TextureUtils.getCachedTexture(textureUrls[3]);
             if (tex == null) {
                 TextureUtils.fetchImmediateRemoteTexture(textureUrls[3], (id) -> {});
                 tex = TextureUtils.blurredTile;
@@ -672,7 +523,7 @@ public class Minimap {
             double drawZ = (divZ + 1 - tileZ) * drawSize - viewZ;
             context.pose().pushMatrix();
             context.pose().translate((float) (topLeftX + drawX), (float) (topLeftZ + drawZ));
-            context.blit(RenderPipelines.GUI_TEXTURED, tex, 0, 0, 0, 0, drawSize,
+            context.blit(RenderPipelines.GUI_TEXTURED, tex.get(), 0, 0, 0, 0, drawSize,
                     drawSize, drawSize, drawSize);
             context.pose().popMatrix();
         }
@@ -684,8 +535,9 @@ public class Minimap {
         this.lastX = mc.player.getBlockX();
         this.lastZ = mc.player.getBlockZ();
         if(!sp.hideMinimapNetworks) {
-            for (int i = 0; i < linesToDraw.size(); i++) {
-                drawLine(context, (int)linesToDraw.get(i).coords[0][0] + topLeftZ, (int)linesToDraw.get(i).coords[0][1] + topLeftX, (int)linesToDraw.get(i).coords[1][0] + topLeftZ, (int)linesToDraw.get(i).coords[1][1] + topLeftX, linesToDraw.get(i).colour);
+            for (int i = 0; i < transportNetwork.getSegments().size(); i++) {
+                TransportNetwork.Segment line = transportNetwork.getSegments().get(i);
+                MapRenderUtils.drawLine(context, (int)line.coords[0][0] + topLeftZ, (int)line.coords[0][1] + topLeftX, (int)line.coords[1][0] + topLeftZ, (int)line.coords[1][1] + topLeftX, line.colour);
             }
         }
 
@@ -719,7 +571,7 @@ public class Minimap {
                 float translateZ = (float) ((topLeftZ + (minimapTileSize / 2)) - offsetFromPlayerZ);
                 context.pose().translate(translateX, translateZ);
                 context.pose().translate(-4, -4);
-                ResourceLocation placeMarkerChoice;
+                ResIdentifier placeMarkerChoice;
                 switch (place.type) {
                     case "farm":
                     case "landmark":
@@ -746,7 +598,7 @@ public class Minimap {
                 }
                 context.blit(
                         RenderPipelines.GUI_TEXTURED,
-                        placeMarkerChoice,
+                        placeMarkerChoice.get(),
                         0, 0, 0, 0, 8, 8, 8, 8);
                 context.pose().popMatrix();
 
@@ -781,7 +633,7 @@ public class Minimap {
                 double offsetFromPlayerZ;
                 context.pose().pushMatrix();
                 
-                ResourceLocation playerMarkerChoice;
+                ResIdentifier playerMarkerChoice;
                 switch (player.world) {
                     case "minecraft_overworld":
                         if(getDimensionNID().equals("minecraft_overworld")) {
@@ -819,7 +671,7 @@ public class Minimap {
                 // Now draw their marker
                 context.blit(
                         RenderPipelines.GUI_TEXTURED,
-                        playerMarkerChoice,
+                        playerMarkerChoice.get(),
                         0, 0, 0, 0, 8, 8, 8, 8);
 
                 context.pose().popMatrix();
@@ -857,7 +709,7 @@ public class Minimap {
         context.pose().translate(-4, -4);
         context.blit(
                 RenderPipelines.GUI_TEXTURED,
-                PLAYER,
+                PLAYER.get(),
                 0, 0,
                 0, 0, // u, v
                 8, 8, // draw size
@@ -865,7 +717,7 @@ public class Minimap {
         );
         context.pose().popMatrix();
 
-        if(!tooltipApplied && sp.minimapScale == 1.0 && mc.screen instanceof ChatScreen) {
+        if(!tooltipApplied && sp.minimapScale == 1.0 && /*? if <26.2 {*/mc.screen/*?} else {*//*mc.gui.screen()*//*?}*/ instanceof ChatScreen) {
             renderMinimapTooltip(context, List.of("Hover over the minimap's icons", "to view player or place details!"));
         }
 
@@ -876,7 +728,7 @@ public class Minimap {
             textCoordinatesPos = 48;
         }
         // Add coordinate string beneath minimap
-        context.drawCenteredString(mc.font, String.format("%d, %d, %d", mc.player.blockPosition().getX(),
+        GraphicsHelper.drawCenteredString(context, mc.font, String.format("%d, %d, %d", mc.player.blockPosition().getX(),
                 mc.player.blockPosition().getY(), mc.player.blockPosition().getZ()), textCoordinatesPos, 95, 0xFFFFFFFF);
 
         context.pose().popMatrix();
@@ -885,3 +737,5 @@ public class Minimap {
 
 
 }
+
+

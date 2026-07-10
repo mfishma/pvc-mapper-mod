@@ -1,5 +1,9 @@
 package larrytllama.pvcmappermod;
 
+import larrytllama.pvcmappermod.utils.*;
+
+import larrytllama.pvcmappermod.utils.ResIdentifier;
+
 import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.util.Base64;
@@ -12,7 +16,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.resources.ResourceLocation;
+
 
 class SponsorBanner {
     String title;
@@ -47,7 +51,7 @@ public class SponsorUtils {
         }
     }
 
-    public static void bannerToTexture(String bannerDataURL, Consumer<ResourceLocation> callback) {
+    public static void bannerToTexture(String bannerDataURL, Consumer<ResIdentifier> callback) {
         String b64string = bannerDataURL.replace("data:image/png;base64,", "");
         if(b64string.startsWith("data:")) {
             callback.accept(null); // Wrong file format (not PNG)
@@ -63,8 +67,8 @@ public class SponsorUtils {
             }
             Minecraft.getInstance().execute(() -> {
                 DynamicTexture texture = new DynamicTexture(() -> idString, image);
-                ResourceLocation resourceLocation = ResourceLocation.fromNamespaceAndPath("pvcmappermod", idString);
-                Minecraft.getInstance().getTextureManager().register(resourceLocation, texture);
+                ResIdentifier resourceLocation = ResIdentifier.of("pvcmappermod", idString);
+                Minecraft.getInstance().getTextureManager().register(resourceLocation.get(), texture);
                 callback.accept(resourceLocation);
             });
         } catch(Exception e) {
@@ -74,3 +78,4 @@ public class SponsorUtils {
 
     }
 }
+

@@ -1,10 +1,15 @@
 package larrytllama.pvcmappermod;
 
+import larrytllama.pvcmappermod.utils.*;
+
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
+//? if <1.21.11 {
+import net.minecraft.Util;
+//?} else {
+/*import net.minecraft.util.Util;*///?}
 import net.minecraft.server.players.ProfileResolver;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.PlayerSkin;
@@ -28,10 +33,13 @@ import org.lwjgl.glfw.GLFW;
 
 import com.mojang.authlib.GameProfile;
 import net.minecraft.ChatFormatting;
-import net.minecraft.Util;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+//? if <26.1 {
 import net.minecraft.client.gui.GuiGraphics;
+//?} else {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;*///?}
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.Tooltip;
@@ -52,7 +60,7 @@ public class FullScreenMap extends Screen {
     public int overlayItemID;
     public String overlayItemType;
     public FeatureTypes overlayFeature;
-    public ResourceLocation overlayImage;
+    public ResIdentifier overlayImage;
     public String overlayImageStatus;
     public ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
     private boolean isMouseDown = false;
@@ -79,7 +87,7 @@ public class FullScreenMap extends Screen {
     }
 
     public void showToast(String title, String content) {
-        minecraft.getToastManager().addToast(
+        CompatUtils.addToast(
             new SystemToast(SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
                 Component.literal(title),
                 Component.literal(content)
@@ -101,7 +109,7 @@ public class FullScreenMap extends Screen {
             if (overlayOpen)
                 overlayOpen = false;
             else
-                Minecraft.getInstance().setScreen(null);
+                CompatUtils.setScreen(null);
                 //this.onClose(); // closes the screen
             return true;
         }
@@ -119,13 +127,12 @@ public class FullScreenMap extends Screen {
     public int z = 0;
     public int minimapTileSize = 120;
 
-    Map<String, ResourceLocation> tiles = new HashMap<String, ResourceLocation>();
+    Map<String, ResIdentifier> tiles = new HashMap<>();
 
     public void resetTiles() {
-        this.tiles = new HashMap<String, ResourceLocation>();
+        this.tiles = new HashMap<>();
     }
-    ResourceLocation blurredTile = ResourceLocation.fromNamespaceAndPath("pvcmappermod",
-            "textures/gui/tileloading.png");
+    ResIdentifier blurredTile = ResIdentifier.of("pvcmappermod", "textures/gui/tileloading.png");
 
     private boolean drawSponsorTooltip = false;
 
@@ -144,10 +151,10 @@ public class FullScreenMap extends Screen {
         double worldBottom = z + (this.height / scale);
         String dimension = "" + currentDimension;
         // Figure out tile no. at top left/bottom right
-        int topLeftTileX = Math.floorDiv((int) worldLeft, renderTileSize) - 1;
-        int topLeftTileZ = Math.floorDiv((int) worldTop, renderTileSize) - 1;
-        int bottomRightTileX = Math.floorDiv((int) worldRight, renderTileSize) + 1;
-        int bottomRightTileZ = Math.floorDiv((int) worldBottom, renderTileSize) + 1;
+        int topLeftTileX = MapRenderUtils.worldToTileCoordinate(worldLeft, renderTileSize) - 1;
+        int topLeftTileZ = MapRenderUtils.worldToTileCoordinate(worldTop, renderTileSize) - 1;
+        int bottomRightTileX = MapRenderUtils.worldToTileCoordinate(worldRight, renderTileSize) + 1;
+        int bottomRightTileZ = MapRenderUtils.worldToTileCoordinate(worldBottom, renderTileSize) + 1;
 
         int thisZoomLevel = zoomlevel;
         for (int iX = topLeftTileX; iX < bottomRightTileX; iX++) {
@@ -176,7 +183,7 @@ public class FullScreenMap extends Screen {
         if (claimsCheckbox.selected()) {
             if (zoomlevel < 8) {
                 // Disable for safety
-                minecraft.getToastManager().addToast(new SystemToast(
+                CompatUtils.addToast(new SystemToast(
                         SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
                         Component.literal("Too Many Claims!"),
                         Component.literal("Zoom in to re-enable claims")));
@@ -198,14 +205,6 @@ public class FullScreenMap extends Screen {
 
     public FeatureFetch[] shownFeatures = new FeatureFetch[0];
 
-    private double getScale() {
-            return 1 / Math.pow(2, 8);
-    }
-
-    private double metersToPixels(double num) {
-        return Math.round(num / getScale());
-    }
-
     private boolean isChangingFeatures = false;
     public void resetFeatures() {
         int tilesize = 1 << (17 - zoomlevel);
@@ -217,19 +216,24 @@ public class FullScreenMap extends Screen {
                 z,
                 (int) (z + ((this.height - bottomMapOffset) / scale)))
             .thenAccept(features -> {
-                shownFeatures = features;
-                isChangingFeatures = true;
-                // Convert bounds to coordinate format because grr weird format
-                for (int i = 0; i < shownFeatures.length; i++) {
-                    if(shownFeatures[i].featureType.equals("area")) {
-                        if(shownFeatures[i].bounds == null) continue;
-                        for (int bound = 0; bound < shownFeatures[i].bounds.length; bound++) {
-                            shownFeatures[i].bounds[bound][0] = metersToPixels(shownFeatures[i].bounds[bound][0]);
-                            shownFeatures[i].bounds[bound][1] = metersToPixels(shownFeatures[i].bounds[bound][1]);
+                // Perform bounds calculation on the local 'features' array first to prevent
+                // concurrency crashes where the main thread reads half-updated arrays.
+                for (int i = 0; i < features.length; i++) {
+                    if(features[i].featureType.equals("area")) {
+                        if(features[i].bounds == null) continue;
+                        for (int bound = 0; bound < features[i].bounds.length; bound++) {
+                            features[i].bounds[bound][0] = MapRenderUtils.metersToPixels(features[i].bounds[bound][0]);
+                            features[i].bounds[bound][1] = MapRenderUtils.metersToPixels(features[i].bounds[bound][1]);
                         }
                     }
                 }
-                isChangingFeatures = false;
+                
+                // Safely assign the final array to the global state on the main game thread.
+                minecraft.execute(() -> {
+                    isChangingFeatures = true;
+                    shownFeatures = features;
+                    isChangingFeatures = false;
+                });
             });
         
         recalculateNetworks();
@@ -269,7 +273,7 @@ public class FullScreenMap extends Screen {
                         mbe.y() > ((shownFeatures[i].z - z) * scale) - (minecraft.font.lineHeight / 2) &&
                         mbe.y() < ((shownFeatures[i].z - z) * scale) + (minecraft.font.lineHeight / 2)) {
                         if(mbe.hasControlDown()) {
-                            minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
+                            CompatUtils.setScreen(minecraft, new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
                         } else {
                             LogUtils.debug("Feature clicked: " + shownFeatures[i].id);
                             int index = i;
@@ -302,7 +306,7 @@ public class FullScreenMap extends Screen {
                         switch (shownFeatures[i].featureType) {
                             case "place":
                                 if(mbe.hasControlDown()) {
-                                    minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
+                                    CompatUtils.setScreen(minecraft, new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
                                 } else {
                                     pfu.fetchPlaceAsync(shownFeatures[index].id)
                                         .thenAccept(feature -> {
@@ -326,7 +330,7 @@ public class FullScreenMap extends Screen {
 
                             case "portal":
                                 if(mbe.hasControlDown()) {
-                                    minecraft.setScreen(new ChatScreen(String.format("%s: %d, %d in %s", pfu.getPortalPrettyName(shownFeatures[i].type), (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
+                                    CompatUtils.setScreen(minecraft, new ChatScreen(String.format("%s: %d, %d in %s", pfu.getPortalPrettyName(shownFeatures[i].type), (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
                                 }
                                 break;
                             default:
@@ -449,258 +453,111 @@ public class FullScreenMap extends Screen {
         hasMovedZ = z;
         if (mbe.y() > (this.height - 28) && mbe.y() < (this.height - 3) && mbe.x() > 3 && mbe.x() < 196) {
             Minecraft mc = Minecraft.getInstance();
-            mc.setScreen(new ConfirmLinkScreen(confirmed -> {
+            CompatUtils.setScreen(mc, new ConfirmLinkScreen(confirmed -> {
                 if (confirmed) {
                     Util.getPlatform().openUri(sponsorURLString);
                 }
-                mc.setScreen(null);
+                CompatUtils.setScreen(mc, null);
             }, sponsorURLString, true));
         }
         return super.mouseClicked(mbe, bl);
     }
 
-    public void drawTooltip(GuiGraphics context, List<MutableComponent> content, int x, int y) {
-        int lines = content.size();
-        Font mcfont = Minecraft.getInstance().font;
-        int maxSize = 0;
-        for (int i = 0; i < lines; i++) {
-            int w = mcfont.width(content.get(i));
-            if (w > maxSize) {
-                maxSize = w;
-            }
-        }
-        TooltipRenderUtil.renderTooltipBackground(context, x, y, maxSize, mcfont.lineHeight * lines, null);
-        for (int i = 0; i < lines; i++) {
-            context.drawString(
-                    mcfont,
-                    content.get(i),
-                    x,
-                    y + (i * mcfont.lineHeight),
-                    0xFFFFFFFF, false);
-        }
-    }
-
     private String hoverPlayerName;
-    private ResourceLocation hoverPlayerFace = ResourceLocation.fromNamespaceAndPath("minecraft",
-            "textures/entity/player/wide/steve.png");
+    private ResIdentifier hoverPlayerFace = PlayerSkinHelper.DEFAULT_SKIN;
 
     private void getTooltipPlayer(String uuid, String name) {
-        Minecraft mc = Minecraft.getInstance();
-
-        UUID dashed = UUID.fromString(
-                uuid.substring(0, 8) + "-" +
-                        uuid.substring(8, 12) + "-" +
-                        uuid.substring(12, 16) + "-" +
-                        uuid.substring(16, 20) + "-" +
-                        uuid.substring(20));
-        ResolvableProfile resolvable = ResolvableProfile.createUnresolved(dashed);
-        resolvable.resolveProfile(Minecraft.getInstance().services().profileResolver()).thenAccept((resolvedProfile) -> {
-            CompletableFuture<Optional<PlayerSkin>> skin = mc.getSkinManager().get(resolvedProfile);
-            skin.thenAccept(playerSkin -> {
-                // Fallback to steeeeeeeeeve
-                if (playerSkin.isEmpty()) hoverPlayerFace = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png");
-                else hoverPlayerFace = playerSkin.get().body().texturePath();
-            });
+        PlayerSkinHelper.fetchSkin(uuid, "FullScreenMap", (skin) -> {
+            hoverPlayerFace = skin;
         });
-        
     }
 
-    public void drawPlayerTooltip(GuiGraphics context, PlayerFetch player, int x, int y) {
+    public void drawPlayerTooltip(/*? if <26.1 {*/GuiGraphics/*?} else {*//*GuiGraphicsExtractor*//*?}*/ context, PlayerFetch player, int x, int y) {
 
         List<MutableComponent> content = List.of(
                 Component.literal(player.name).withStyle(ChatFormatting.BOLD),
                 Component.literal(player.x + ", " + player.z + " - " + pfu.prettyDimensionName(player.world)),
                 Component.literal("Health: " + (player.health / 2) + "/10 - Armor: " + (player.armor / 2) + "/10"));
-        drawTooltip(context, content, x + TooltipRenderUtil.PADDING_LEFT, y + TooltipRenderUtil.PADDING_TOP);
+        MapRenderUtils.drawTooltipComponent(context, content, x + TooltipRenderUtil.PADDING_LEFT, y + TooltipRenderUtil.PADDING_TOP);
         if (hoverPlayerName != player.name) {
             getTooltipPlayer(player.uuid, player.name);
             hoverPlayerName = player.name;
         }
 
-        context.blit(RenderPipelines.GUI_TEXTURED, hoverPlayerFace,
+        context.blit(RenderPipelines.GUI_TEXTURED, hoverPlayerFace.get(),
                 x + TooltipRenderUtil.PADDING_LEFT + minecraft.font.width(content.get(0)) + 1,
                 y + TooltipRenderUtil.PADDING_TOP, 8, 8, 8, 8, 64, 64);
-        context.blit(RenderPipelines.GUI_TEXTURED, hoverPlayerFace,
+        context.blit(RenderPipelines.GUI_TEXTURED, hoverPlayerFace.get(),
                 x + TooltipRenderUtil.PADDING_LEFT + minecraft.font.width(content.get(0)) + 1,
                 y + TooltipRenderUtil.PADDING_TOP, 40, 8, 8, 8, 64, 64);
     }
 
     // Improved drawLine
-    public static void drawLine(GuiGraphics g, int x0, int y0, int x1, int y1, int color) {
-        int dx = Math.abs(x1 - x0);
-        int dy = Math.abs(y1 - y0);
-        int sx = x0 < x1 ? 1 : -1;
-        int sy = y0 < y1 ? 1 : -1;
-        int err = dx - dy;
-
-        int currentY = y0;
-        int lineMinX = x0;
-        int lineMaxX = x0;
-
-        while (true) {
-            int e2 = err * 2;
-
-            if (e2 > -dy) { err -= dy; x0 += sx; }
-            if (e2 < dx)  { err += dx; y0 += sy; }
-
-            // If Y changed, draw the accumulated scanline before moving on
-            if (y0 != currentY) {
-                drawScanline(g, lineMinX, lineMaxX, currentY, color);
-                currentY = y0;
-                lineMinX = x0;
-                lineMaxX = x0;
-            } else {
-                // Still on same Y, accumulate X
-                lineMinX = Math.min(lineMinX, x0);
-                lineMaxX = Math.max(lineMaxX, x0);
-            }
-
-            if (x0 == x1 && y0 == y1) {
-                // Draw final scanline
-                drawScanline(g, lineMinX, lineMaxX, currentY, color);
-                break;
-            }
-        }
-    }
-
-    private static void drawScanline(GuiGraphics g, int minX, int maxX, int y, int color) {
-        if (y <= 0 || y >= g.guiHeight()) return;
-        minX = Math.max(minX, 0);
-        maxX = Math.min(maxX, g.guiWidth() - 1);
-        if (minX <= maxX) {
-            g.fill(minX, y, maxX + 1, y + 1, color);
-        }
-    }
 
     private int bottomMapOffset = 31;
 
-    public ResourceLocation sponsorBanner;
+    public ResIdentifier sponsorBanner;
     public List<MutableComponent> sponsorHoverText;
     public String sponsorURLString;
 
-    private final ResourceLocation searchIcon = ResourceLocation.fromNamespaceAndPath("minecraft",
+    private final ResIdentifier searchIcon = ResIdentifier.of("minecraft",
             "textures/gui/sprites/icon/search.png");
-    private final ResourceLocation settingsIcon = ResourceLocation.fromNamespaceAndPath("pvcmappermod",
+    private final ResIdentifier settingsIcon = ResIdentifier.of("pvcmappermod",
             "textures/gui/settings.png");
-    private final ResourceLocation compassIcon = ResourceLocation.fromNamespaceAndPath("minecraft",
+    private final ResIdentifier compassIcon = ResIdentifier.of("minecraft",
             "textures/item/compass_19.png");
 
-    private final ResourceLocation OVERWORLD = ResourceLocation.fromNamespaceAndPath("minecraft", "overworld");
-    private final ResourceLocation NETHER = ResourceLocation.fromNamespaceAndPath("minecraft", "the_nether");
+    private final ResIdentifier OVERWORLD = ResIdentifier.of("minecraft", "overworld");
+    private final ResIdentifier NETHER = ResIdentifier.of("minecraft", "the_nether");
     // Heh, eng
-    private final ResourceLocation ENG = ResourceLocation.fromNamespaceAndPath("minecraft", "the_end");
+    private final ResIdentifier ENG = ResIdentifier.of("minecraft", "the_end");
 
-    public boolean doesIntersect(double x1, double y1, double x2, double y2, double boxX, double boxY, double boxWidth, double boxHeight) {
-        Rectangle2D rect = new Rectangle2D.Double(boxX, boxY, boxWidth, boxHeight);
-        Line2D line = new Line2D.Double(x1, y1, x2, y2);
-                                        
-        // intersectsLine checks both endpoint containment and edge crossings automatically
-        return rect.intersectsLine(line);
-    }
-
-    public int networkTypeToColour(String type) {
-        switch (type) {
-            case "ice":
-            case "boat":
-                return 0xFF13F2F2;
-            case "rail":
-                return 0xFF000000;
-            case "pathMark":
-            case "pathUnmark":
-                return 0xFFFFFFFF;
-            default:
-                return 0x00000000;
-        }
-    }
-
-    /** Source - https://stackoverflow.com/a/9462757
-    * Posted by Ivan T, modified by community. See post 'Timeline' for change history
-    * Retrieved 2026-06-16, License - CC BY-SA 3.0
-    * (Hell yeah! I'm still using stack overflow)*/
-
-    public double bearing(double lat1, double lon1, double lat2, double lon2){
-        double longitude1 = lon1;
-        double longitude2 = lon2;
-        double latitude1 = Math.toRadians(lat1);
-        double latitude2 = Math.toRadians(lat2);
-        double longDiff= Math.toRadians(longitude2-longitude1);
-        double y= Math.sin(longDiff)*Math.cos(latitude2);
-        double x=Math.cos(latitude1)*Math.sin(latitude2)-Math.sin(latitude1)*Math.cos(latitude2)*Math.cos(longDiff);    
-        return (Math.toDegrees(Math.atan2(y, x))+360)%360;
-    }
-
+    private final TransportNetwork transportNetwork = new TransportNetwork();
 
     public void recalculateNetworks() {
         int tilesize = 1 << (17 - zoomlevel);
         double scale = (double) minimapTileSize / tilesize;
 
-        linesToDraw.clear();
-        // For each network
-        for (int i=0;i<allNetworks.length;i++) {
-            if(!allNetworks[i].dimension.equals(currentDimension)) continue;
-            if(zoomlevel < 9 && (allNetworks[i].type.equals("pathMark") || allNetworks[i].type.equals("pathUnmark")) ) continue;
-            for (int street=0;street<allNetworks[i].edges.length;street++) {
-                if(allNetworks[i].edges[street] == null) continue;
-                for (int line=0;line<allNetworks[i].edges[street].coords.length-1;line++) {
-                    double[] startPoint = allNetworks[i].edges[street].coords[line];
-                    double[] endPoint = allNetworks[i].edges[street].coords[line + 1];
-                    if(endPoint == null) continue;
-                    if(doesIntersect(metersToPixels(startPoint[1]), metersToPixels(startPoint[0]), metersToPixels(endPoint[1]), metersToPixels(endPoint[0]), x, z, (this.width / scale), ((this.height - bottomMapOffset) / scale) )) {
-                        // Calc where to draw the lines
-                        double[][] linePoints = new double[][]{ 
-                            new double[]{ (metersToPixels(startPoint[1]) - x) * scale, (metersToPixels(startPoint[0]) - z) * scale}, 
-                            new double[]{ (metersToPixels(endPoint[1]) - x) * scale, (metersToPixels(endPoint[0]) - z) * scale}
-                        };
-                        linesToDraw.add(
-                            new NetworkConverted(
-                                linePoints, 
-                                allNetworks[i].edges[street].name, 
-                                networkTypeToColour(allNetworks[i].type), 
-                                minecraft.font.width(allNetworks[i].edges[street].name),
-                                bearing(startPoint[1], startPoint[0], endPoint[1], endPoint[0])
-                            )
-                        );
-                    }
-                }
-            }
-        }
+        transportNetwork.recalculate(allNetworks, currentDimension, zoomlevel, minimapTileSize, x, z, (this.width / scale), ((this.height - bottomMapOffset) / scale), "FullScreenMap");
     }
-
-    public ArrayList<NetworkConverted> linesToDraw = new ArrayList<NetworkConverted>();
 
     public String currentDimension = getDimensionID();
 
     int lastX = 0;
     int lastZ = 0;
 
+    //? if <26.1 {
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*@Override
+    public void extractRenderState(net.minecraft.client.gui.GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {*///?}
         if (overlayOpen && overlayFeature != null) {
-            context.drawString(minecraft.font, Component.literal("Press ESC to go back").withStyle(ChatFormatting.ITALIC), 5, 5, 0xFF555555);
+            GraphicsHelper.drawString(context, minecraft.font, Component.literal("Press ESC to go back").withStyle(ChatFormatting.ITALIC), 5, 5, 0xFF555555);
             if(overlayItemType.equals("place")) {
                 // Title
-                context.drawCenteredString(minecraft.font, Component.literal(overlayFeature.place.name).withStyle(ChatFormatting.BOLD), this.width / 2, 40, 0xFFFFFFFF);
+                GraphicsHelper.drawCenteredString(context, minecraft.font, Component.literal(overlayFeature.place.name).withStyle(ChatFormatting.BOLD), this.width / 2, 40, 0xFFFFFFFF);
                 // Dividing line
-                context.vLine(this.width / 2, 60, this.height - 20, 0xFF636363);
+                GraphicsHelper.vLine(context, this.width / 2, 60, this.height - 20, 0xFF636363);
                 // Description
                 List<FormattedCharSequence> lines = minecraft.font.split(Component.literal(overlayFeature.place.description), (this.width / 2) - 20 );
                 int descHeight = lines.size() * minecraft.font.lineHeight;
                 for (int i = 0; i < lines.size(); i++) {
-                    context.drawString(minecraft.font, lines.get(i), (this.width / 2) + 10, 63 + (i * minecraft.font.lineHeight), 0xFFFFFFFF);
+                    GraphicsHelper.drawString(context, minecraft.font, lines.get(i), (this.width / 2) + 10, 63 + (i * minecraft.font.lineHeight), 0xFFFFFFFF);
                 }
                 
                 // Location
-                context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/icon/link.png"), (this.width/2) + 8, 66 + descHeight, 0, 0, 12, 12, 12, 12);
-                context.drawString(minecraft.font, String.format("%s, %s in %s", overlayFeature.place.x, overlayFeature.place.z, pfu.prettyDimensionName(overlayFeature.place.dimension)), (this.width / 2) + 22, 68 + descHeight, 0xFFFFFFFF);
+                context.blit(RenderPipelines.GUI_TEXTURED, ResIdentifier.of("minecraft", "textures/gui/sprites/icon/link.png").get(), (this.width/2) + 8, 66 + descHeight, 0, 0, 12, 12, 12, 12);
+                GraphicsHelper.drawString(context, minecraft.font, String.format("%s, %s in %s", overlayFeature.place.x, overlayFeature.place.z, pfu.prettyDimensionName(overlayFeature.place.dimension)), (this.width / 2) + 22, 68 + descHeight, 0xFFFFFFFF);
             
                 // Added by
-                context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/icon/accessibility.png"), (this.width/2) + 8, 72 + descHeight + minecraft.font.lineHeight, 0, 0, 12, 12, 12, 12);
-                context.drawString(minecraft.font, String.format("Added by %s", overlayFeature.place.addedBy.name), (this.width / 2) + 22, 74 + descHeight + minecraft.font.lineHeight, 0xFFFFFFFF);
+                context.blit(RenderPipelines.GUI_TEXTURED, ResIdentifier.of("minecraft", "textures/gui/sprites/icon/accessibility.png").get(), (this.width/2) + 8, 72 + descHeight + minecraft.font.lineHeight, 0, 0, 12, 12, 12, 12);
+                GraphicsHelper.drawString(context, minecraft.font, String.format("Added by %s", overlayFeature.place.addedBy.name), (this.width / 2) + 22, 74 + descHeight + minecraft.font.lineHeight, 0xFFFFFFFF);
 
                 // Wiki Link
                 if(overlayFeature.place.wiki != null && overlayFeature.place.wiki.length() > 1) {
-                    context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/toast/social_interactions.png"), (this.width/2) + 8, 76 + descHeight + (minecraft.font.lineHeight * 2), 0, 0, 12, 12, 12, 12);
-                    context.drawString(minecraft.font, overlayFeature.place.wiki, (this.width / 2) + 22, 78 + descHeight + (minecraft.font.lineHeight * 2), 0xFFFFFFFF);
+                    context.blit(RenderPipelines.GUI_TEXTURED, ResIdentifier.of("minecraft", "textures/gui/sprites/toast/social_interactions.png").get(), (this.width/2) + 8, 76 + descHeight + (minecraft.font.lineHeight * 2), 0, 0, 12, 12, 12, 12);
+                    GraphicsHelper.drawString(context, minecraft.font, overlayFeature.place.wiki, (this.width / 2) + 22, 78 + descHeight + (minecraft.font.lineHeight * 2), 0xFFFFFFFF);
                 }
 
                 int currentHeight = 83 + descHeight + (minecraft.font.lineHeight * 3);
@@ -708,23 +565,23 @@ public class FullScreenMap extends Screen {
                 // Features
                 if(overlayFeature.place.features != null) {
                     if(overlayFeature.place.features.Public) {
-                        context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/icon/new_realm.png"), (this.width/2) + 8, currentHeight, 0, 0, 24, 12, 24, 12);
-                        context.drawString(minecraft.font, "Made for public use", (this.width / 2) + 32, currentHeight + 2, 0xFFFFFFFF);
+                        context.blit(RenderPipelines.GUI_TEXTURED, ResIdentifier.of("minecraft", "textures/gui/sprites/icon/new_realm.png").get(), (this.width/2) + 8, currentHeight, 0, 0, 24, 12, 24, 12);
+                        GraphicsHelper.drawString(context, minecraft.font, "Made for public use", (this.width / 2) + 32, currentHeight + 2, 0xFFFFFFFF);
                         currentHeight += minecraft.font.lineHeight + 5;
                     }
                     if(overlayFeature.place.features.echest) {
-                        context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/item/ender_eye.png"), (this.width/2) + 14, currentHeight, 0, 0, 12, 12, 12, 12);
-                        context.drawString(minecraft.font, "Has ender chest access nearby", (this.width / 2) + 32, currentHeight + 2, 0xFFFFFFFF);
+                        context.blit(RenderPipelines.GUI_TEXTURED, ResIdentifier.of("minecraft", "textures/item/ender_eye.png").get(), (this.width/2) + 14, currentHeight, 0, 0, 12, 12, 12, 12);
+                        GraphicsHelper.drawString(context, minecraft.font, "Has ender chest access nearby", (this.width / 2) + 32, currentHeight + 2, 0xFFFFFFFF);
                         currentHeight += minecraft.font.lineHeight + 5;
                     }
                     if(overlayFeature.place.features.portal) {
-                        context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/block/nether_portal.png"), (this.width/2) + 14, currentHeight, 0, 0, 12, 12, 12, 384);
-                        context.drawString(minecraft.font, "Has nether portal access nearby", (this.width / 2) + 32, currentHeight + 2, 0xFFFFFFFF);
+                        context.blit(RenderPipelines.GUI_TEXTURED, ResIdentifier.of("minecraft", "textures/block/nether_portal.png").get(), (this.width/2) + 14, currentHeight, 0, 0, 12, 12, 12, 384);
+                        GraphicsHelper.drawString(context, minecraft.font, "Has nether portal access nearby", (this.width / 2) + 32, currentHeight + 2, 0xFFFFFFFF);
                         currentHeight += minecraft.font.lineHeight + 5;
                     }
                     if(overlayFeature.place.features.historical) {
-                        context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/item/clock_00.png"), (this.width/2) + 14, currentHeight, 0, 0, 12, 12, 12, 12);
-                        context.drawString(minecraft.font, "Historical Place", (this.width / 2) + 32, currentHeight + 2, 0xFFFFFFFF);
+                        context.blit(RenderPipelines.GUI_TEXTURED, ResIdentifier.of("minecraft", "textures/item/clock_00.png").get(), (this.width/2) + 14, currentHeight, 0, 0, 12, 12, 12, 12);
+                        GraphicsHelper.drawString(context, minecraft.font, "Historical Place", (this.width / 2) + 32, currentHeight + 2, 0xFFFFFFFF);
                         currentHeight += minecraft.font.lineHeight + 5;
                     }
                 }
@@ -732,45 +589,45 @@ public class FullScreenMap extends Screen {
                 context.fill(this.width / 6, 63, (this.width / 2) - 10, 183, 0x70000000);
 
                 if(overlayImage != null) {
-                    context.blit(RenderPipelines.GUI_TEXTURED, overlayImage, this.width / 6, 63, 0, 0, (this.width / 2) - (this.width / 6) - 10, 120, (this.width / 2) - (this.width / 6) - 10, 120);
+                    context.blit(RenderPipelines.GUI_TEXTURED, overlayImage.get(), this.width / 6, 63, 0, 0, (this.width / 2) - (this.width / 6) - 10, 120, (this.width / 2) - (this.width / 6) - 10, 120);
                 } else {
-                    context.drawCenteredString(minecraft.font, overlayImageStatus, (((this.width / 2) - 10 - (this.width / 6)) / 2) + (this.width / 6), 121, 0xFFFFFFFF);
+                    GraphicsHelper.drawCenteredString(context, minecraft.font, overlayImageStatus, (((this.width / 2) - 10 - (this.width / 6)) / 2) + (this.width / 6), 121, 0xFFFFFFFF);
                 }
 
 
             } else if(overlayItemType.equals("area")) {
                 try {
                     // Title
-                    context.drawCenteredString(minecraft.font, Component.literal(overlayFeature.area.name).withStyle(ChatFormatting.BOLD), this.width / 2, 40, 0xFFFFFFFF);
+                    GraphicsHelper.drawCenteredString(context, minecraft.font, Component.literal(overlayFeature.area.name).withStyle(ChatFormatting.BOLD), this.width / 2, 40, 0xFFFFFFFF);
                     // Dividing line
-                    context.vLine(this.width / 2, 60, this.height - 20, 0xFF636363);
+                    GraphicsHelper.vLine(context, this.width / 2, 60, this.height - 20, 0xFF636363);
                     // Description
                     List<FormattedCharSequence> lines = minecraft.font.split(Component.literal(overlayFeature.area.description), (this.width / 2) - 20 );
                     int descHeight = lines.size() * minecraft.font.lineHeight;
                     for (int i = 0; i < lines.size(); i++) {
-                        context.drawString(minecraft.font, lines.get(i), (this.width / 2) + 10, 63 + (i * minecraft.font.lineHeight), 0xFFFFFFFF);
+                        GraphicsHelper.drawString(context, minecraft.font, lines.get(i), (this.width / 2) + 10, 63 + (i * minecraft.font.lineHeight), 0xFFFFFFFF);
                     }
 
                     // Location
-                    context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/icon/link.png"), (this.width/2) + 8, 66 + descHeight, 0, 0, 12, 12, 12, 12);
-                    context.drawString(minecraft.font, String.format("%s, %s in %s", overlayFeature.area.x, overlayFeature.area.z, pfu.prettyDimensionName(overlayFeature.area.dimension)), (this.width / 2) + 22, 68 + descHeight, 0xFFFFFFFF);
+                    context.blit(RenderPipelines.GUI_TEXTURED, ResIdentifier.of("minecraft", "textures/gui/sprites/icon/link.png").get(), (this.width/2) + 8, 66 + descHeight, 0, 0, 12, 12, 12, 12);
+                    GraphicsHelper.drawString(context, minecraft.font, String.format("%s, %s in %s", overlayFeature.area.x, overlayFeature.area.z, pfu.prettyDimensionName(overlayFeature.area.dimension)), (this.width / 2) + 22, 68 + descHeight, 0xFFFFFFFF);
                 
                     // Added by
-                    context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/icon/accessibility.png"), (this.width/2) + 8, 72 + descHeight + minecraft.font.lineHeight, 0, 0, 12, 12, 12, 12);
-                    context.drawString(minecraft.font, String.format("Added by %s", overlayFeature.area.addedBy.username), (this.width / 2) + 22, 74 + descHeight + minecraft.font.lineHeight, 0xFFFFFFFF);
+                    context.blit(RenderPipelines.GUI_TEXTURED, ResIdentifier.of("minecraft", "textures/gui/sprites/icon/accessibility.png").get(), (this.width/2) + 8, 72 + descHeight + minecraft.font.lineHeight, 0, 0, 12, 12, 12, 12);
+                    GraphicsHelper.drawString(context, minecraft.font, String.format("Added by %s", overlayFeature.area.addedBy.username), (this.width / 2) + 22, 74 + descHeight + minecraft.font.lineHeight, 0xFFFFFFFF);
 
                     // Wiki Link
                     if(overlayFeature.area.wiki != null && overlayFeature.area.wiki.length() > 1) {
-                        context.blit(RenderPipelines.GUI_TEXTURED, ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/toast/social_interactions.png"), (this.width/2) + 8, 76 + descHeight + (minecraft.font.lineHeight * 2), 0, 0, 12, 12, 12, 12);
-                        context.drawString(minecraft.font, overlayFeature.area.wiki, (this.width / 2) + 22, 78 + descHeight + (minecraft.font.lineHeight * 2), 0xFFFFFFFF);
+                        context.blit(RenderPipelines.GUI_TEXTURED, ResIdentifier.of("minecraft", "textures/gui/sprites/toast/social_interactions.png").get(), (this.width/2) + 8, 76 + descHeight + (minecraft.font.lineHeight * 2), 0, 0, 12, 12, 12, 12);
+                        GraphicsHelper.drawString(context, minecraft.font, overlayFeature.area.wiki, (this.width / 2) + 22, 78 + descHeight + (minecraft.font.lineHeight * 2), 0xFFFFFFFF);
                     }
 
                     context.fill(this.width / 6, 63, (this.width / 2) - 10, 183, 0x70000000);
 
                     if(overlayImage != null) {
-                        context.blit(RenderPipelines.GUI_TEXTURED, overlayImage, this.width / 6, 63, 0, 0, (this.width / 2) - (this.width / 6) - 10, 120, (this.width / 2) - (this.width / 6) - 10, 120);
+                        context.blit(RenderPipelines.GUI_TEXTURED, overlayImage.get(), this.width / 6, 63, 0, 0, (this.width / 2) - (this.width / 6) - 10, 120, (this.width / 2) - (this.width / 6) - 10, 120);
                     } else {
-                        context.drawCenteredString(minecraft.font, overlayImageStatus, (((this.width / 2) - 10 - (this.width / 6)) / 2) + (this.width / 6), 121, 0xFFFFFFFF);
+                        GraphicsHelper.drawCenteredString(context, minecraft.font, overlayImageStatus, (((this.width / 2) - 10 - (this.width / 6)) / 2) + (this.width / 6), 121, 0xFFFFFFFF);
                     }
                 } catch(Exception e) {
                     LogUtils.debug("[PVC Mapper Mod] Unable to write area details to screen renderererer.");
@@ -789,20 +646,20 @@ public class FullScreenMap extends Screen {
             double worldBottom = z + ((this.height - bottomMapOffset) / scale);
 
             // Figure out tile no. at top left/bottom right
-            int topLeftTileX = Math.floorDiv((int) worldLeft, renderTileSize);
-            int topLeftTileZ = Math.floorDiv((int) worldTop, renderTileSize);
-            int bottomRightTileX = Math.floorDiv((int) worldRight, renderTileSize) + 1;
-            int bottomRightTileZ = Math.floorDiv((int) worldBottom, renderTileSize) + 1;
+            int topLeftTileX = MapRenderUtils.worldToTileCoordinate(worldLeft, renderTileSize);
+            int topLeftTileZ = MapRenderUtils.worldToTileCoordinate(worldTop, renderTileSize);
+            int bottomRightTileX = MapRenderUtils.worldToTileCoordinate(worldRight, renderTileSize) + 1;
+            int bottomRightTileZ = MapRenderUtils.worldToTileCoordinate(worldBottom, renderTileSize) + 1;
 
             // Iterate thru visible tiles
-            double xOffsetFromTileStart = Math.floorMod((int) worldLeft, renderTileSize);
-            double zOffsetFromTileStart = Math.floorMod((int) worldTop, renderTileSize);
+            double xOffsetFromTileStart = MapRenderUtils.worldToLocalTileCoordinate(worldLeft, renderTileSize);
+            double zOffsetFromTileStart = MapRenderUtils.worldToLocalTileCoordinate(worldTop, renderTileSize);
             context.scissorStack.push(new ScreenRectangle(0, 0, this.width, this.height - bottomMapOffset));
             for (int iX = topLeftTileX; iX < bottomRightTileX; iX++) {
                 for (int iZ = topLeftTileZ; iZ < bottomRightTileZ; iZ++) {
                     String thisDimension = currentDimension.equals("minecraft_terra2") && sp.useDarkTiles ? "minecraft_terra2_night" : currentDimension;
                     String url = String.format("%s%s/%d/%d_%d.png", sp.mapTileSource, thisDimension, renderZoom, iX, iZ);
-                    ResourceLocation tile = TextureUtils.getCachedTexture(url);
+                    ResIdentifier tile = TextureUtils.getCachedTexture(url);
                     if (tile == null)
                         tile = TextureUtils.blurredTile;
                     context.pose().pushMatrix();
@@ -814,7 +671,7 @@ public class FullScreenMap extends Screen {
                                     ((iZ - topLeftTileZ) * drawSize)) // For the Z axis
                     );
                     context.blit(
-                            RenderPipelines.GUI_TEXTURED, tile, // Render tile with the following x pos:
+                            RenderPipelines.GUI_TEXTURED, tile.get(), // Render tile with the following x pos:
                             0, 0,
                             0, 0, // u/v
                             drawSize, drawSize, // width/height
@@ -830,16 +687,17 @@ public class FullScreenMap extends Screen {
             }
             this.lastX = this.x;
             this.lastZ = this.z;
-            for (int i = 0; i < linesToDraw.size(); i++) {
-                drawLine(context, (int)linesToDraw.get(i).coords[0][0], (int)linesToDraw.get(i).coords[0][1], (int)linesToDraw.get(i).coords[1][0], (int)linesToDraw.get(i).coords[1][1], linesToDraw.get(i).colour);
+            for (int i = 0; i < transportNetwork.getSegments().size(); i++) {
+                TransportNetwork.Segment line = transportNetwork.getSegments().get(i);
+                MapRenderUtils.drawLine(context, (int)line.coords[0][0], (int)line.coords[0][1], (int)line.coords[1][0], (int)line.coords[1][1], line.colour);
             }
 
             int networkLinePadding = 75;
 
             // Draw street names on top
             if(zoomlevel > 9) {
-                for (int i = 0; i<linesToDraw.size();i++) {
-                    NetworkConverted line = linesToDraw.get(i);
+                for (int i = 0; i<transportNetwork.getSegments().size();i++) {
+                    TransportNetwork.Segment line = transportNetwork.getSegments().get(i);
                     int nameLength = minecraft.font.width(line.streetName) / 2;
                     double[][] coords = line.coords;
 
@@ -867,7 +725,7 @@ public class FullScreenMap extends Screen {
                         if(line.lineBearing > 90 && line.lineBearing < 270) context.pose().rotate((float)Math.toRadians(-180));
                         context.pose().scale((float) 0.5, (float) 0.5);
                         context.fill(-(line.nameWidth / 2) - 2, -2, (line.nameWidth / 2) + 2, minecraft.font.lineHeight + 2, 0x80000000);
-                        context.drawCenteredString(minecraft.font, line.streetName, 0, 0, 0xFFFFFFFF);
+                        GraphicsHelper.drawCenteredString(context, minecraft.font, line.streetName, 0, 0, 0xFFFFFFFF);
                         context.pose().popMatrix();
                         numberToDraw-=1;
                     }
@@ -891,13 +749,13 @@ public class FullScreenMap extends Screen {
                     int width = (int) ((claim.points[1].x - claim.points[0].x) * scale);
                     int height = (int) ((claim.points[1].z - claim.points[0].z) * scale);
                     // Left
-                    context.vLine(0, 0, height, outlineColor);
+                    GraphicsHelper.vLine(context, 0, 0, height, outlineColor);
                     // Right
-                    context.vLine(width, 0, height, outlineColor);
+                    GraphicsHelper.vLine(context, width, 0, height, outlineColor);
                     // Top
-                    context.hLine(0, width, 0, outlineColor);
+                    GraphicsHelper.hLine(context, 0, width, 0, outlineColor);
                     // Bottom
-                    context.hLine(0, width, height, outlineColor);
+                    GraphicsHelper.hLine(context, 0, width, height, outlineColor);
                     context.pose().popMatrix();
                     // context.submitOutline((int)((claim.points[0].x - x) * scale),
                     // (int)((claim.points[0].z - z) * scale), (int)((claim.points[1].x -
@@ -916,7 +774,7 @@ public class FullScreenMap extends Screen {
                 for (int bound = 0; bound < boundlength  - 1; bound++) {
                     if( shownFeatures[hoveredPlaceIndex].bounds != null &&
                         shownFeatures[hoveredPlaceIndex].bounds[bound].length == 2
-                    ) drawLine(context,
+                    ) MapRenderUtils.drawLine(context,
                         (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound][1] - x)*scale),
                         (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound][0] - z)*scale),
                         (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound + 1][1] - x)*scale),
@@ -925,7 +783,7 @@ public class FullScreenMap extends Screen {
                     );
                 }
                 // Draw one to connect it back up too
-                if(shownFeatures[hoveredPlaceIndex].bounds.length == boundlength) drawLine(context,
+                if(shownFeatures[hoveredPlaceIndex].bounds.length == boundlength) MapRenderUtils.drawLine(context,
                     (int) ((shownFeatures[hoveredPlaceIndex].bounds[boundlength - 1][1] - x)*scale),
                     (int) ((shownFeatures[hoveredPlaceIndex].bounds[boundlength - 1][0] - z)*scale),
                     (int) ((shownFeatures[hoveredPlaceIndex].bounds[0][1] - x)*scale),
@@ -944,7 +802,7 @@ public class FullScreenMap extends Screen {
                     context.pose().pushMatrix();
                     context.pose().translate((float) ((feature.x - x) * scale), (float) ((feature.z - z) * scale));
                     context.pose().translate(-4, -4);
-                    context.blit(RenderPipelines.GUI_TEXTURED, pfu.getPlaceIcon(feature.type), 0, 0, 0, 0, 8, 8, 8, 8);
+                    context.blit(RenderPipelines.GUI_TEXTURED, pfu.getPlaceIcon(feature.type).get(), 0, 0, 0, 0, 8, 8, 8, 8);
                     context.pose().popMatrix();
                 } else if (feature.featureType.equals("area")) {
                     context.pose().pushMatrix();
@@ -952,13 +810,13 @@ public class FullScreenMap extends Screen {
                     context.pose().scale((float) 0.5, (float) 0.5);
                     context.fill(-(minecraft.font.width(feature.name) / 2) - 2, -2,
                             (minecraft.font.width(feature.name) / 2) + 2, minecraft.font.lineHeight + 2, 0x80000000);
-                    context.drawCenteredString(minecraft.font, feature.name, 0, 0, 0xFFFFFFFF);
+                    GraphicsHelper.drawCenteredString(context, minecraft.font, feature.name, 0, 0, 0xFFFFFFFF);
                     context.pose().popMatrix();
                 } else if (feature.featureType.equals("portal")) {
                     context.pose().pushMatrix();
                     context.pose().translate((float) ((feature.x - x) * scale), (float) ((feature.z - z) * scale));
                     context.pose().translate(-4, -4);
-                    context.blit(RenderPipelines.GUI_TEXTURED, pfu.getPortalIcon(feature.type), 0, 0, 0, 0, 8, 8, 8, 8);
+                    context.blit(RenderPipelines.GUI_TEXTURED, pfu.getPortalIcon(feature.type).get(), 0, 0, 0, 0, 8, 8, 8, 8);
                     context.pose().popMatrix();
                 }
             }
@@ -970,30 +828,32 @@ public class FullScreenMap extends Screen {
                 PlayerFetch player = playersList.get(i);
                 if (minecraft.player.getName() == Component.literal(player.name))
                     continue;
-                if ((player.x > worldLeft && player.x < worldRight)
-                        && (player.z > worldTop && player.z < worldBottom)) {
-                    context.pose().pushMatrix();
-                    float offsetFromLeft = (float) ((player.x - worldLeft) * scale);
-                    float offsetFromTop = (float) ((player.z - worldTop) * scale);
-                    if(currentDimension.equals(player.world)) {
-                        context.pose().translate(offsetFromLeft, offsetFromTop);
+                // Calculate the player's Effective X/Z coordinates for the map's current dimension.
+                // This must be done BEFORE checking if they are within the screen bounds (worldLeft/worldRight),
+                // otherwise players in the Nether will be skipped when zoomed in on the Overworld.
+                double effectiveX = player.x;
+                double effectiveZ = player.z;
+
+                if (!currentDimension.equals(player.world)) {
+                    if (currentDimension.equals("minecraft_overworld")) {
+                        effectiveX = player.x * 8;
+                        effectiveZ = player.z * 8;
                     } else {
-                        if(currentDimension.equals("minecraft_overworld")) {
-                            offsetFromLeft = (float) ((player.x*8 - worldLeft) * scale);
-                            offsetFromTop = (float) ((player.z*8 - worldTop) * scale);
-                            context.pose().translate(offsetFromLeft, offsetFromTop);
-                            //context.pose().translate(-4, -4);
-                        } else {
-                            offsetFromLeft = (float) ((player.x/8 - worldLeft) * scale);
-                            offsetFromTop = (float) ((player.z/8 - worldTop) * scale);
-                            context.pose().translate(offsetFromLeft, offsetFromTop);
-                            //context.pose().translate(-4, -4);
-                        }
+                        effectiveX = player.x / 8;
+                        effectiveZ = player.z / 8;
                     }
+                }
+
+                if ((effectiveX > worldLeft && effectiveX < worldRight)
+                        && (effectiveZ > worldTop && effectiveZ < worldBottom)) {
+                    context.pose().pushMatrix();
+                    float offsetFromLeft = (float) ((effectiveX - worldLeft) * scale);
+                    float offsetFromTop = (float) ((effectiveZ - worldTop) * scale);
+                    context.pose().translate(offsetFromLeft, offsetFromTop);
 
                     context.pose().rotate((float) Math.toRadians(player.yaw - 180));
                     context.pose().translate(-4, -4);
-                    ResourceLocation playerMarkerChoice;
+                    ResIdentifier playerMarkerChoice;
                     if(minecraft.player.getName().equals(Component.literal(player.name))) {
                         playerMarkerChoice = pfu.THIS_PLAYER;
                     } else {
@@ -1011,7 +871,7 @@ public class FullScreenMap extends Screen {
                     }
                     context.blit(
                             RenderPipelines.GUI_TEXTURED,
-                            playerMarkerChoice,
+                            playerMarkerChoice.get(),
                             0, 0, 0, 0, 8, 8, 8, 8);
                     context.pose().popMatrix();
 
@@ -1026,7 +886,7 @@ public class FullScreenMap extends Screen {
             MutableComponent coords = currentLocationCoordinates;
             if(coords == null) coords = Component.literal("--, --");
             context.fill(2, this.height - bottomMapOffset - minecraft.font.lineHeight - 4, 6 + minecraft.font.width(coords.getString()), this.height - bottomMapOffset - 1, 0xB0000000);
-            context.drawString(minecraft.font, currentLocationCoordinates, 4, this.height - bottomMapOffset - minecraft.font.lineHeight - 2, 0xFFFFFFFF);
+            GraphicsHelper.drawString(context, minecraft.font, currentLocationCoordinates, 4, this.height - bottomMapOffset - minecraft.font.lineHeight - 2, 0xFFFFFFFF);
 
             context.scissorStack.pop();
 
@@ -1056,7 +916,7 @@ public class FullScreenMap extends Screen {
                         placeId = "" + shownFeatures[hoveredPlaceIndex].id;
                         break;
                 }
-                drawTooltip(context, List.of(
+                MapRenderUtils.drawTooltipComponent(context, List.of(
                     Component.literal(placeName).append(Component.literal(" (" + placeId + ")").withStyle(ChatFormatting.GRAY)),
                     Component.literal(subText).withStyle(ChatFormatting.ITALIC, ChatFormatting.GRAY),
                     Component.literal("Ctrl+Click to share Coords").withStyle(ChatFormatting.ITALIC, ChatFormatting.GRAY)),
@@ -1064,7 +924,7 @@ public class FullScreenMap extends Screen {
             } else if(hoveredClaimIndex != -1 && hoveredClaimIndex < shownClaims.size()) {
                 // And claims
                 String claimHoverOwner = shownClaims.get(hoveredClaimIndex).popup.substring(32).replace("</span>", "");
-                drawTooltip(context, List.of(
+                MapRenderUtils.drawTooltipComponent(context, List.of(
                     Component.literal("This claim is owned by:").withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC),
                     Component.literal(claimHoverOwner.length() == 0 ? "Nobody (this is an admin claim!)" : claimHoverOwner)
                 ), mouseX + 7, mouseY + 4);
@@ -1072,37 +932,40 @@ public class FullScreenMap extends Screen {
 
             // 387x50
             if (sponsorBanner != null) {
-                context.blit(RenderPipelines.GUI_TEXTURED, sponsorBanner, 3, this.height - 28, 0, 0, 193, 25, 193, 25);
+                context.blit(RenderPipelines.GUI_TEXTURED, sponsorBanner.get(), 3, this.height - 28, 0, 0, 193, 25, 193, 25);
                 if (drawSponsorTooltip) {
-                    drawTooltip(context, sponsorHoverText, mouseX, mouseY);
+                    MapRenderUtils.drawTooltipComponent(context, sponsorHoverText, mouseX, mouseY);
                 }
             } else {
-                context.drawString(Minecraft.getInstance().font, "Loading banner...", 10, this.height - 30, 0xFFFFFFFF);
+                GraphicsHelper.drawString(context, Minecraft.getInstance().font, "Loading banner...", 10, this.height - 30, 0xFFFFFFFF);
             }
 
             // Draw button builders
+            //? if <26.1 {
             super.render(context, mouseX, mouseY, delta);
+            //?} else {
+            /*super.extractRenderState(context, mouseX, mouseY, delta);*///?}
             // Draw on top of buttons
-            context.blit(RenderPipelines.GUI_TEXTURED, searchIcon, this.width - 21, 9, 0, 0, 12, 12, 12, 12);
-            context.blit(RenderPipelines.GUI_TEXTURED, settingsIcon, this.width - 21, 34, 0, 0, 12, 12, 12, 12);
-            context.blit(RenderPipelines.GUI_TEXTURED, compassIcon, this.width - 21, this.height - bottomMapOffset - 21, 0, 0, 12, 12, 12, 12);
+            context.blit(RenderPipelines.GUI_TEXTURED, searchIcon.get(), this.width - 21, 9, 0, 0, 12, 12, 12, 12);
+            context.blit(RenderPipelines.GUI_TEXTURED, settingsIcon.get(), this.width - 21, 34, 0, 0, 12, 12, 12, 12);
+            context.blit(RenderPipelines.GUI_TEXTURED, compassIcon.get(), this.width - 21, this.height - bottomMapOffset - 21, 0, 0, 12, 12, 12, 12);
 
             // Zoom level number
             context.blit(RenderPipelines.GUI_TEXTURED,
-                    ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/sprites/widget/checkbox.png"),
+                    ResIdentifier.of("minecraft", "textures/gui/sprites/widget/checkbox.png").get(),
                     5, 30, 0, 0, 20, 20, 20, 20);
-            context.drawCenteredString(minecraft.font, String.format("%d", zoomlevel), 15, 35, 0xFFFFFFFF);
+            GraphicsHelper.drawCenteredString(context, minecraft.font, String.format("%d", zoomlevel), 15, 35, 0xFFFFFFFF);
         }
     }
 
     public String getDimensionID() {
         if(Minecraft.getInstance().level == null) return "minecraft_overworld";
-        return "minecraft_" + Minecraft.getInstance().level.dimension().location().getPath();
+        return "minecraft_" + CompatUtils.getIdentifier(Minecraft.getInstance().level.dimension()).getPath();
     }
 
     @Override
     protected void init() {
-        currentDimension = "minecraft_" + Minecraft.getInstance().level.dimension().location().getPath();
+        currentDimension = "minecraft_" + CompatUtils.getIdentifier(Minecraft.getInstance().level.dimension()).getPath();
         Button negZoomBtn = Button.builder(Component.nullToEmpty("-"), (btn) -> {
             // Get current middle
             int oldtilesize = 1 << (17 - zoomlevel);
@@ -1142,10 +1005,10 @@ public class FullScreenMap extends Screen {
             resetClaims();
         }).bounds(5, 5, 20, 20).tooltip(Tooltip.create(Component.literal("Zoom in"))).build();
         Button searchZoomBtn = Button.builder(Component.nullToEmpty(" "), (btn) -> {
-            minecraft.setScreen(new ChatScreen("/search ", false));
+            CompatUtils.setScreen(minecraft, new ChatScreen("/search ", false));
         }).bounds(this.width - 25, 5, 20, 20).tooltip(Tooltip.create(Component.literal("Search PVC Mapper"))).build();
         Button settingsBtn = Button.builder(Component.nullToEmpty(" "), (btn) -> {
-            minecraft.setScreen(ClothConfigScreen.createScreen(sp, this));
+            CompatUtils.setScreen(minecraft, ClothConfigScreen.createScreen(sp, this));
         }).bounds(this.width - 25, 30, 20, 20).tooltip(Tooltip.create(Component.literal("PVC Mapper Mod Settings"))).build();
         
         // Add sponsor banner code here
@@ -1231,18 +1094,3 @@ public class FullScreenMap extends Screen {
     }
 }
 
-class NetworkConverted {
-    String streetName;
-    int nameWidth;
-    double lineBearing;
-    double[][] coords;
-    int colour;
-
-    public NetworkConverted(double[][] coords, String streetName, int colour, int nameWidth, double lineBearing) {
-        this.coords = coords;
-        this.streetName = streetName;
-        this.colour = colour;
-        this.nameWidth = nameWidth;
-        this.lineBearing = lineBearing;
-    }
-}

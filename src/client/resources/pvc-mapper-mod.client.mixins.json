@@ -5,6 +5,9 @@
 	"client": [
 		"TabListMixin",
 		"ServerListMixin"
+		//? if >=26.1 {
+		/*,"GuiAccessor"*/
+		//?}
 	],
 	"injectors": {
 		"defaultRequire": 1
