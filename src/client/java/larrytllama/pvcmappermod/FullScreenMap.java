@@ -511,7 +511,7 @@ public class FullScreenMap extends Screen {
         int tilesize = 1 << (17 - zoomlevel);
         double scale = (double) minimapTileSize / tilesize;
 
-        transportNetwork.recalculate(allNetworks, currentDimension, zoomlevel, minimapTileSize, x, z, (this.width / scale), ((this.height - bottomMapOffset) / scale), "FullScreenMap");
+        transportNetwork.recalculate(allNetworks, currentDimension, zoomlevel, minimapTileSize, x, z, this.width, this.height - bottomMapOffset, "FullScreenMap");
     }
 
     public String currentDimension = getDimensionID();
