@@ -70,6 +70,8 @@ public class PVCMapperModClient implements ClientModInitializer {
     public SettingsProvider sp;
     public PlayerFetchUtils pfu;
 
+    public static PVCMapperModClient INSTANCE;
+
     // Brigadier commands execute synchronously inside ChatScreen's text field handler.
     // Setting screen synchronously gets instantly closed/overwritten by the chat screen closing,
     // so we queue the screen/task to open on the very next client tick instead.
@@ -134,6 +136,7 @@ public class PVCMapperModClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        INSTANCE = this;
         // Settings provider
         SettingsProvider sp = SettingsProvider.getInstance();
         sp.updateSettings();

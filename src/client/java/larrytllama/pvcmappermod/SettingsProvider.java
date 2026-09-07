@@ -58,6 +58,9 @@ public class SettingsProvider {
     public boolean showPlayers = true;    
     public boolean showClaims = false;    
 
+    // Hidden settings for things we need to save but the user can't configure cos I'm lazy
+    public boolean shownDataNotice = false;
+
     Path path = FabricLoader.getInstance().getConfigDir().resolve("pvcmapper.json");
 
     public SettingsProvider() {
@@ -90,6 +93,7 @@ public class SettingsProvider {
                 showPlayers = settingsFromFile.showPlayers;
                 showClaims = settingsFromFile.showClaims;
                 showInOtherPlaces = settingsFromFile.showInOtherPlaces;
+                shownDataNotice = settingsFromFile.shownDataNotice;
             } catch(Exception e) {
                 LogUtils.error("Couldn't read settings file", e);
                 new SystemToast(SystemToastId.FILE_DROP_FAILURE, Component.literal("PVC Mapper Settings Error"), Component.literal("Couldn't open the Setting file, check you have permissions to access it!"));
@@ -133,6 +137,7 @@ public class SettingsProvider {
         settingsToSet.showPlayers = showPlayers;
         settingsToSet.showClaims = showClaims;
         settingsToSet.showInOtherPlaces = showInOtherPlaces;
+        settingsToSet.shownDataNotice = shownDataNotice;
         try {
             LogUtils.debug("Writing to settings!" + path.getParent().toString());
             Files.createDirectories(path.getParent());
@@ -169,6 +174,7 @@ class SettingsJSON {
     boolean showNetworks = true;
     boolean showPlayers = true;
     boolean showClaims = false;
+    boolean shownDataNotice = false;
 }
 
 enum MiniMapPositions {

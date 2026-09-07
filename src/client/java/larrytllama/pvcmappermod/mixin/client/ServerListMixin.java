@@ -4,6 +4,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 //? if <26.1 {
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
 //?} else {
 /*import net.minecraft.client.gui.GuiGraphicsExtractor;*///?}
 import net.minecraft.client.gui.components.ObjectSelectionList;

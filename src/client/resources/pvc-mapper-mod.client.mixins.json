@@ -4,7 +4,9 @@
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"TabListMixin",
-		"ServerListMixin"
+		"ServerListMixin",
+		"ServerListEntryMixin",
+		"JoinMultiplayerScreenInvoker"
 		//? if >=26.1 {
 		/*,"GuiAccessor"*/
 		//?}
