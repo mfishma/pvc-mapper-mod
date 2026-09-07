@@ -318,6 +318,9 @@ public class Minimap {
     }
 
     public void render(/*? if <26.1 {*/GuiGraphics/*?} else {*//*GuiGraphicsExtractor*//*?}*/ context, DeltaTracker tickCounter) {
+        if(!sp.showInOtherPlaces && !(Minecraft.getInstance().getConnection().getServerData() != null && Minecraft.getInstance().getConnection().getServerData().ip.contains("peacefulvanilla.club"))) {
+            return;
+        }
         tickAccumulator += tickCounter.getRealtimeDeltaTicks();
         if(!sp.miniMapEnabled) return;
         // Apply scaling

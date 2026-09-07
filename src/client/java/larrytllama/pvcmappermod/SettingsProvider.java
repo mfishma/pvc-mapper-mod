@@ -50,6 +50,8 @@ public class SettingsProvider {
 
     public boolean showLeavingPopup = true;
 
+    public boolean showInOtherPlaces = false;
+
     public boolean showPlaces = true;    
     public boolean showAreas = true;    
     public boolean showNetworks = true;    
@@ -87,6 +89,7 @@ public class SettingsProvider {
                 showNetworks = settingsFromFile.showNetworks;
                 showPlayers = settingsFromFile.showPlayers;
                 showClaims = settingsFromFile.showClaims;
+                showInOtherPlaces = settingsFromFile.showInOtherPlaces;
             } catch(Exception e) {
                 LogUtils.error("Couldn't read settings file", e);
                 new SystemToast(SystemToastId.FILE_DROP_FAILURE, Component.literal("PVC Mapper Settings Error"), Component.literal("Couldn't open the Setting file, check you have permissions to access it!"));
@@ -129,6 +132,7 @@ public class SettingsProvider {
         settingsToSet.showNetworks = showNetworks;
         settingsToSet.showPlayers = showPlayers;
         settingsToSet.showClaims = showClaims;
+        settingsToSet.showInOtherPlaces = showInOtherPlaces;
         try {
             LogUtils.debug("Writing to settings!" + path.getParent().toString());
             Files.createDirectories(path.getParent());
@@ -159,6 +163,7 @@ class SettingsJSON {
     OrwellianMeter orwellMeter = OrwellianMeter.SMART;
     boolean showWelcomePopup = true;
     boolean showLeavingPopup = true;
+    boolean showInOtherPlaces = false;
     boolean showPlaces = true;
     boolean showAreas = true;
     boolean showNetworks = true;

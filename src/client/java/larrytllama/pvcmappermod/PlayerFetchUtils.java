@@ -684,6 +684,10 @@ public class PlayerFetchUtils {
             CompatUtils.addToast(new SystemToast(SystemToastId.PERIODIC_NOTIFICATION, Component.literal("PVC Mapper Mod Error"), Component.literal("Check for updates failed. The Mapper may be down!")));
         }
     }
+
+    public boolean isInPVC() {
+        return (Minecraft.getInstance().getConnection().getServerData() != null && Minecraft.getInstance().getConnection().getServerData().ip.contains("peacefulvanilla.club"));
+    }
 }
 
 class CoordPair {

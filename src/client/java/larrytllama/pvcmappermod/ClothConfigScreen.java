@@ -42,6 +42,7 @@ public class ClothConfigScreen extends Screen {
     private EnumListEntry<OrwellianMeter> orwellMeter;
     private BooleanListEntry showWelcomePopup;
     private BooleanListEntry showLeavingPopup;
+    private BooleanListEntry showInOtherPlaces;
     private BooleanListEntry showPlaces;
     private BooleanListEntry showAreas;
     private BooleanListEntry showNetworks;
@@ -66,6 +67,7 @@ public class ClothConfigScreen extends Screen {
             sp.orwellMeter = this.orwellMeter.getValue();
             sp.showWelcomePopup = this.showWelcomePopup.getValue();
             sp.showLeavingPopup = this.showLeavingPopup.getValue();
+            sp.showInOtherPlaces = this.showInOtherPlaces.getValue();
 
             sp.showPlaces = this.showPlaces.getValue();
             sp.showAreas = this.showAreas.getValue();
@@ -187,6 +189,12 @@ public class ClothConfigScreen extends Screen {
             .setTooltip(Component.literal("Contribute to the PVC Mapper, uploading ranks and player nicknames!"), Component.literal("(The mod simply uploads the entries provided by the tab list)"))
             .build();
         miscSettings.addEntry(this.collectData);
+        
+        this.showInOtherPlaces = entryBuilder.startBooleanToggle(Component.literal("Show mod features elsewhere"), sp.showInOtherPlaces)
+            .setDefaultValue(false)
+            .setTooltip(Component.literal("Enables or disables all mapper mod features in servers or worlds other than PVC."), Component.literal("NOTE: You will need to rejoin PVC or install Mod Menu to change settings from another server with this set to False."))
+            .build();
+        miscSettings.addEntry(this.showInOtherPlaces);
         
         this.debugMode = entryBuilder.startBooleanToggle(Component.literal("Debug Mode"), sp.debugMode)
             .setDefaultValue(false)

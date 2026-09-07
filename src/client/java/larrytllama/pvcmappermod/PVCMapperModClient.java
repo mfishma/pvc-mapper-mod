@@ -228,6 +228,9 @@ public class PVCMapperModClient implements ClientModInitializer {
                 this.wasInPortal = false;
             }
             while (OPEN_MAP.consumeClick()) {
+                if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                    continue;
+                }
                 // Alt+M (or Alt+Full-screen-map-key) to hide minimap
                 if(InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_LEFT_ALT) || InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_RIGHT_ALT)) {
                     if(sp.miniMapEnabled) sp.miniMapEnabled = false;
@@ -239,10 +242,16 @@ public class PVCMapperModClient implements ClientModInitializer {
             }
 
             while (OPEN_SHOPS.consumeClick()) {
+                if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                    continue;
+                }
                 CompatUtils.setScreen(new ShopsScreen(Component.literal("PVC Mapper - Shops View")));
             }
 
             while (MINIMAP_ZOOM_IN.consumeClick()) {
+                if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                    continue;
+                }
                 if (this.minimap.zoomlevel != 15) {
                     this.minimap.zoomlevel += 1;
                     this.minimap.resetTileImageCache();
@@ -250,6 +259,9 @@ public class PVCMapperModClient implements ClientModInitializer {
             }
 
             while (MINIMAP_ZOOM_OUT.consumeClick()) {
+                if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                    continue;
+                }
                 if (this.minimap.zoomlevel != 1) {
                     this.minimap.zoomlevel -= 1;
                     this.minimap.resetTileImageCache();
@@ -272,6 +284,9 @@ public class PVCMapperModClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register((client) -> {
             if (client.level == null) return;
+            if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                return;
+            }
             inLevelTicks++;
             if(inLevelTicks == 40) {
                 inLevelTicks = 0;
@@ -337,13 +352,16 @@ public class PVCMapperModClient implements ClientModInitializer {
             minimap.isInQueue = false;
             minimap.isInTerra2 = false;
             minimap.isLoadingIn = true;
-            pfu.startUpdates();
+            pfu.startUpdates(); // TODO: Renable when in PVC
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             pfu.stopUpdates();
         });
 
         ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
+            if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                return true;
+            }
             if (Minecraft.getInstance().player == null) return true;
             String text = message.getString();
             if(text.trim().length() == 0) return false;
@@ -446,6 +464,9 @@ public class PVCMapperModClient implements ClientModInitializer {
     }
 
     private ModifyGame messageRunner = (message, overlay) -> {
+        if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+            return message;
+        }
         
         // If a game chat message
         if(message.getContents() instanceof TranslatableContents translatable) {
