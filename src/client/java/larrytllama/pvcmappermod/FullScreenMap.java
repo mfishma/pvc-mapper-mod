@@ -71,9 +71,7 @@ public class FullScreenMap extends Screen {
         FullScreenMap fsm = new FullScreenMap(title);
         fsm.pfu = pfu;
         fsm.sp = sp;
-        // We will allow max level 11 on the full screen map but allow minimap to make the most of it all!
-        // (mouse dragging goes weird after that point for some reason. TODO)
-        fsm.zoomlevel = Math.min(11, sp.miniMapZoom); 
+        fsm.zoomlevel = Math.min(15, sp.miniMapZoom); 
 
         pfu.fetchNetworksAsync().thenAccept(networks -> {
             fsm.allNetworks = networks;
@@ -121,11 +119,11 @@ public class FullScreenMap extends Screen {
     private int topLeftX = 0;
     private int topLeftZ = 0;
     public int zoomlevel = 8;
-    public int maxZoomLevel = 11;
+    public int maxZoomLevel = 15;
     public int minZoomLevel = 1;
 
-    public int x = 0;
-    public int z = 0;
+    public double x = 0;
+    public double z = 0;
     
     public int minimapTileSize = 120;
 
@@ -138,11 +136,11 @@ public class FullScreenMap extends Screen {
 
     private boolean drawSponsorTooltip = false;
 
-    int lastMouseX = 0;
-    int lastMouseY = 0;
+    double lastMouseX = 0;
+    double lastMouseY = 0;
 
     // On mouse move, we'll check for new tiles
-    private void onMouseMove(int mouseX, int mouseY) {
+    private void onMouseMove(double mouseX, double mouseY) {
         int renderZoom = Math.min(8, zoomlevel);
         int renderTileSize = 1 << (17 - renderZoom);
         int tilesize = 1 << (17 - zoomlevel);
@@ -179,7 +177,7 @@ public class FullScreenMap extends Screen {
         double scale = (double) minimapTileSize / tilesize;
         if (sp.showClaims) {
             if (zoomlevel < 8) return;
-            shownClaims = pfu.getClaimsInBounds(currentDimension, x, (int) (x + (this.width / scale)), z,
+            shownClaims = pfu.getClaimsInBounds(currentDimension, (int)x, (int) (x + (this.width / scale)), (int)z,
                     (int) (z + ((this.height - bottomMapOffset) / scale)));
         } else {
             shownClaims = new ArrayList<ClaimMarkers>();
@@ -194,9 +192,9 @@ public class FullScreenMap extends Screen {
         double scale = (double) minimapTileSize / tilesize;
         pfu.fetchFeaturesAsync(
                 currentDimension,
-                x,
+                (int)x,
                 (int) (x + (this.width / scale)),
-                z,
+                (int)z,
                 (int) (z + ((this.height - bottomMapOffset) / scale)))
             .thenAccept(features -> {
                 // Perform bounds calculation on the local 'features' array first to prevent
@@ -232,8 +230,8 @@ public class FullScreenMap extends Screen {
         return super.mouseDragged(mouseButtonEvent, d, e);
     }
 
-    int hasMovedX;
-    int hasMovedZ;
+    double hasMovedX;
+    double hasMovedZ;
 
     @Override
     public boolean mouseReleased(MouseButtonEvent mbe) {
@@ -518,8 +516,8 @@ public class FullScreenMap extends Screen {
 
     public boolean showFilters = false;
 
-    int lastX = 0;
-    int lastZ = 0;
+    double lastX = 0;
+    double lastZ = 0;
 
     //? if <26.1 {
     @Override
