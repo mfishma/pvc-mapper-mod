@@ -26,12 +26,13 @@ jobs:
           distribution: 'microsoft'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
-      - name: build ${{ matrix.version }}
-        run: ./gradlew stonecutter.active="${{ matrix.version }}" build
+      - name: build
+        run: ./gradlew build
       - name: upload ${{ matrix.version }}
         uses: actions/upload-artifact@v4
         with:
           name: mod-build-${{ matrix.version }}
           path: |
             versions/${{ matrix.version }}/build/libs/*.jar
+            !versions/${{ matrix.version }}/build/libs/*-sources.jar
           if-no-files-found: error
