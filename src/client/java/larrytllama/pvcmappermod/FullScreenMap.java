@@ -25,7 +25,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
 import java.time.Instant;
@@ -233,6 +234,33 @@ public class FullScreenMap extends Screen {
     double hasMovedX;
     double hasMovedZ;
 
+    boolean renderContextMenu = false;
+    double contextMenuX;
+    double contextMenuY;
+    int contextMenuWorldX;
+    int contextMenuWorldZ;
+    ArrayList<String> contextMenuItems = new ArrayList<String>(List.of(
+        "Copy Coords",
+        "Copy Coords in Nether/T2",
+        "Copy Coords + Dimension",
+        "Copy Link",
+        "Open on Web",
+        "Centre Map Here"
+    ));
+    int bestContextMenuWidth = 0;
+
+    public String getOppositeDimension(String dimension) {
+        switch (dimension) {
+            case "minecraft_overworld":
+                return "minecraft_the_nether";
+            case "minecraft_the_nether":
+            case "minecraft_terra2":
+                return "minecraft_overworld";
+            default:
+                return "minecraft_unknown";
+        }
+    }
+
     @Override
     public boolean mouseReleased(MouseButtonEvent mbe) {
         isMouseDown = false;
@@ -240,8 +268,55 @@ public class FullScreenMap extends Screen {
             resetClaims();
             resetFeatures();
         } else {
+
             int tilesize = 1 << (17 - zoomlevel);
             double scale = (double) minimapTileSize / tilesize;
+
+            // Note to self: mbe.isRight() is false no matter what
+            // Why is it like this!?
+            if(mbe.button() == 1 && mbe.y() < this.height-bottomMapOffset) {
+                bestContextMenuWidth = 0;
+                contextMenuX = mbe.x();
+                contextMenuY = mbe.y();
+                contextMenuWorldX = (int) ((contextMenuX / scale) + x);
+                contextMenuWorldZ = (int) ((contextMenuY / scale) + z);
+                contextMenuItems.set(0, String.format("%d, %d", contextMenuWorldX, contextMenuWorldZ));
+                contextMenuItems.set(1, String.format("%d, %d in %s", (int) Math.floor(contextMenuWorldX/8), (int) Math.floor(contextMenuWorldZ/8), pfu.prettyDimensionName(getOppositeDimension(currentDimension))));
+                contextMenuItems.set(2, String.format("%d, %d in %s", contextMenuWorldX, contextMenuWorldZ, pfu.prettyDimensionName(currentDimension)));
+                for (int i = 0; i < contextMenuItems.size(); i++) {
+                    bestContextMenuWidth = Math.max(bestContextMenuWidth, font.width(contextMenuItems.get(i))) + 2;
+                }
+                renderContextMenu = true;
+                return super.mouseReleased(mbe);
+            } else if(renderContextMenu && mbe.button() == 0) {
+                if(mbe.x() > contextMenuX && mbe.x() < contextMenuX + bestContextMenuWidth) {
+                    for (int i = 0; i < contextMenuItems.size(); i++) {
+                        if(mbe.y() > contextMenuY + (i * font.lineHeight) && mbe.y() < contextMenuY + ((i+1) * font.lineHeight)) {
+                            // Perform click action
+                            if(i<3) {
+                                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(contextMenuItems.get(i)), null);
+                            } else if(i==3) { 
+                                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(
+                                    String.format("%s?x=%d&z=%d&dimension=%s", NetworkUtils.BASE_URL, contextMenuWorldX, contextMenuWorldZ, currentDimension)
+                                ), null);
+                            } else if(i==4) CompatUtils.setScreen(Minecraft.getInstance(), new ConfirmLinkScreen(confirmed -> {
+                                if (confirmed) {
+                                    Util.getPlatform().openUri(String.format("%s?x=%d&z=%d&dimension=%s", NetworkUtils.BASE_URL, contextMenuWorldX, contextMenuWorldZ, currentDimension));
+                                }
+                                CompatUtils.setScreen(Minecraft.getInstance(), null);
+                            }, String.format("%s?x=%d&z=%d&dimension=%s", NetworkUtils.BASE_URL, contextMenuWorldX, contextMenuWorldZ, currentDimension), true));
+                            else if(i==5) {
+                                x = (int) (contextMenuWorldX-(this.width / scale) / 2);
+                                z = (int) (contextMenuWorldZ-(this.height / scale) / 2);
+                                onMouseMove(x, z);
+                                resetFeatures();
+                            }
+                        }
+                    }
+                }
+                renderContextMenu = false;
+            }
+
             // Check to see if a thing has been clicked
             for (int i = shownFeatures.length - 1; i >= 0; i--) {
                 if(shownFeatures[i].id == 1) {
@@ -431,6 +506,16 @@ public class FullScreenMap extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent mbe, boolean bl) {
+        if(renderContextMenu) {
+            if(!(
+                mbe.x() > contextMenuX && 
+                mbe.x() < contextMenuX + bestContextMenuWidth && 
+                mbe.y() > contextMenuY && 
+                mbe.y() < contextMenuY + (font.lineHeight * contextMenuItems.size()) + 1
+            )) {
+                renderContextMenu = false;
+            } 
+        }
         isMouseDown = true;
         hasMovedX = x;
         hasMovedZ = z;
@@ -966,6 +1051,22 @@ public class FullScreenMap extends Screen {
                     ResIdentifier.of("minecraft", "textures/gui/sprites/widget/checkbox.png").get(),
                     5, 30, 0, 0, 20, 20, 20, 20);
             GraphicsHelper.drawCenteredString(context, minecraft.font, String.format("%d", zoomlevel), 15, 35, 0xFFFFFFFF);
+
+            if(renderContextMenu) {
+                context.pose().pushMatrix();
+                context.pose().translate((float)contextMenuX, (float)contextMenuY);
+                context.fill(0, -1, bestContextMenuWidth, (contextMenuItems.size() * font.lineHeight) + 2,  0xaa3a3a3a);
+                for (int i = 0; i < contextMenuItems.size(); i++) {
+                    if (mouseX > contextMenuX && mouseX < contextMenuX + bestContextMenuWidth &&
+                        mouseY > contextMenuY + (i*font.lineHeight) && mouseY < contextMenuY + (i*font.lineHeight) + font.lineHeight) {
+                        context.fill(0, (i*font.lineHeight) -1, bestContextMenuWidth, (i*font.lineHeight) + font.lineHeight -1, 0x3a000000);
+                    }
+
+                    GraphicsHelper.drawString(context, font, contextMenuItems.get(i), (bestContextMenuWidth / 2) - (font.width( contextMenuItems.get(i)) / 2), i * font.lineHeight, 0xFFFFFFFF);
+                }
+
+                context.pose().popMatrix();
+            }
         }
     }
 
