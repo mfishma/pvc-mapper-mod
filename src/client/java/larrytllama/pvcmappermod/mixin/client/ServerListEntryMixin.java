@@ -30,10 +30,8 @@ public abstract class ServerListEntryMixin {
                 // call the original join after confirming
                 Minecraft mc = Minecraft.getInstance();
                 CompatUtils.setScreen(mc, self);
-                System.out.println("Confirmed Screen");
                 mc.execute(() -> {
                     try {
-                        System.out.println("Calling join(...) now");
                         PVC_ALLOW_JOIN = true;
                         ((net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen) self).join(serverData);
                     } catch (Throwable t) {

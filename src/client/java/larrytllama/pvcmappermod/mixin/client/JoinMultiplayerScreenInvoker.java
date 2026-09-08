@@ -8,6 +8,7 @@ import net.minecraft.client.multiplayer.ServerData;
 
 @Mixin (JoinMultiplayerScreen.class)
 public interface JoinMultiplayerScreenInvoker {
-    @Invoker ("join") // method name may differ by mappings; adjust if needed
+    // Join the thing
+    @Invoker ("join")
     void invokeConnect(ServerData serverData);
 }
