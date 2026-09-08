@@ -9,6 +9,11 @@ on: [pull_request, push]
 jobs:
   build:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [1.21.10, 1.21.11, 26.1, 26.2]
+      
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
@@ -21,12 +26,12 @@ jobs:
           distribution: 'microsoft'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
-      - name: build
-        run: ./gradlew build
-      - name: capture build artifacts
+      - name: build ${{ matrix.version }}
+        run: ./gradlew stonecutter.active="${{ matrix.version }}" build
+      - name: upload ${{ matrix.version }}
         uses: actions/upload-artifact@v4
         with:
-          name: Artifacts
+          name: mod-build-${{ matrix.version }}
           path: |
-            versions/*/build/libs/*.jar
+            versions/${{ matrix.version }}/build/libs/*.jar
           if-no-files-found: error
