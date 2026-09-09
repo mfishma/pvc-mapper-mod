@@ -17,7 +17,7 @@ https://pvc.coolwebsite.uk/mod
 
 
 > [!CAUTION]
-> These builds may fail and crash your game! If you experience any bugs/crashes from these, try going back a build.
+> The following builds may fail and crash your game! If you experience any bugs/crashes from these, try going back a build.
 > While theses builds shouldn't™ corrupt your game, there is no guarantee. Use at your own risk ✨
 - Find the latest test builds from the Github Actions output
     - Head to the actions page: https://github.com/LarryTLlama/pvc-mapper-mod/actions/
