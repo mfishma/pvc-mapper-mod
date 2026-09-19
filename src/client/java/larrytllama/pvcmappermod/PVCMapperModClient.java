@@ -6,6 +6,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -14,6 +15,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
@@ -44,7 +47,10 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents.Modi
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.contents.PlainTextContents.LiteralContents;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Blocks;
 
 public class PVCMapperModClient implements ClientModInitializer {
     public Category MOD_CATEGORY = Category.register(ResIdentifier.of("pvcmappermod", "category").get());
@@ -61,6 +67,8 @@ public class PVCMapperModClient implements ClientModInitializer {
     public DirectionsProvider dp;
     public SettingsProvider sp;
     public PlayerFetchUtils pfu;
+
+    public static PVCMapperModClient INSTANCE;
 
     // Brigadier commands execute synchronously inside ChatScreen's text field handler.
     // Setting screen synchronously gets instantly closed/overwritten by the chat screen closing,
@@ -121,8 +129,12 @@ public class PVCMapperModClient implements ClientModInitializer {
             .append(Component.literal("] ").withStyle(Style.EMPTY.withColor(ChatFormatting.DARK_GRAY)))
     };
 
+
+    boolean wasInPortal = false;
+
     @Override
     public void onInitializeClient() {
+        INSTANCE = this;
         // Settings provider
         SettingsProvider sp = SettingsProvider.getInstance();
         sp.updateSettings();
@@ -202,8 +214,24 @@ public class PVCMapperModClient implements ClientModInitializer {
         MINIMAP_ZOOM_IN = CompatUtils.registerKey(MINIMAP_ZOOM_IN);
         MINIMAP_ZOOM_OUT = CompatUtils.registerKey(MINIMAP_ZOOM_OUT);
         fsm = FullScreenMap.createScreen(Component.literal("PVC Mapper - Map View"), pfu, sp);
+
+        
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            // Auto-upload nether portals
+            if(sp.collectData == true && client.player != null && client.level != null && client.level.getBlockState(client.player.blockPosition()).is(Blocks.NETHER_PORTAL)) {
+                System.out.println("Found in portal!");
+                if(!this.wasInPortal) {
+                    System.out.println("Uploading portal!");
+                    this.wasInPortal = true;
+                    pfu.publishNetherPortal(client.player.getStringUUID(), client.player.getBlockX(), client.player.getBlockY(), client.player.getBlockZ());
+                }
+            } else {
+                this.wasInPortal = false;
+            }
             while (OPEN_MAP.consumeClick()) {
+                if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                    continue;
+                }
                 // Alt+M (or Alt+Full-screen-map-key) to hide minimap
                 if(CompatUtils.isKeyDown(InputConstants.KEY_LALT) || CompatUtils.isKeyDown(InputConstants.KEY_RALT)) {
                     if(sp.miniMapEnabled) sp.miniMapEnabled = false;
@@ -215,10 +243,16 @@ public class PVCMapperModClient implements ClientModInitializer {
             }
 
             while (OPEN_SHOPS.consumeClick()) {
+                if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                    continue;
+                }
                 CompatUtils.setScreen(new ShopsScreen(Component.literal("PVC Mapper - Shops View")));
             }
 
             while (MINIMAP_ZOOM_IN.consumeClick()) {
+                if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                    continue;
+                }
                 if (this.minimap.zoomlevel != 15) {
                     this.minimap.zoomlevel += 1;
                     this.minimap.resetTileImageCache();
@@ -226,6 +260,9 @@ public class PVCMapperModClient implements ClientModInitializer {
             }
 
             while (MINIMAP_ZOOM_OUT.consumeClick()) {
+                if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                    continue;
+                }
                 if (this.minimap.zoomlevel != 1) {
                     this.minimap.zoomlevel -= 1;
                     this.minimap.resetTileImageCache();
@@ -248,6 +285,9 @@ public class PVCMapperModClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register((client) -> {
             if (client.level == null) return;
+            if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                return;
+            }
             inLevelTicks++;
             if(inLevelTicks == 40) {
                 inLevelTicks = 0;
@@ -313,13 +353,16 @@ public class PVCMapperModClient implements ClientModInitializer {
             minimap.isInQueue = false;
             minimap.isInTerra2 = false;
             minimap.isLoadingIn = true;
-            pfu.startUpdates();
+            pfu.startUpdates(); // TODO: Renable when in PVC
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             pfu.stopUpdates();
         });
 
         ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
+            if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+                return true;
+            }
             if (Minecraft.getInstance().player == null) return true;
             String text = message.getString();
             if(text.trim().length() == 0) return false;
@@ -358,8 +401,90 @@ public class PVCMapperModClient implements ClientModInitializer {
         return false;
     }
 
+    // Crawl through a string and add hover details to player names
+    private Component addPlayerDetailsToChat(Component message) {
+        System.out.println("node: " + message.getString());
+        System.out.println("style: " + message.getStyle());
+        MutableComponent out = Component.empty(); // Start with empty message
+        // Don't override existing hovering
+        if (out.getStyle().getHoverEvent() == null) {
+            // If the message has siblings, move down the tree
+            if (message.getContents() instanceof TranslatableContents translatable) {
+                if(!translatable.getKey().equals("%s")) { // Ignore non-chat messages
+                    return message;
+                }
+                for (Object arg : translatable.getArgs()) {
+                    if (arg instanceof Component component) {
+                        out.append(addPlayerDetailsToChat(component));
+                    } else if (arg instanceof String string) {
+                        out.append(Component.literal(string));
+                    }
+                }
+            } else if (message.getSiblings().size() > 0) {
+                if (message.getContents() instanceof LiteralContents literal) {
+                    out = Component.literal(literal.text()).withStyle(message.getStyle());
+                }
+                for (Component child : message.getSiblings()) {
+                    out.append(addPlayerDetailsToChat(child));
+                }
+            // If the message doesn't have siblings, check its text for players
+            } else {
+
+                // Do a check to see if any player names are in this message
+                PlayerFetch foundplayer = null;
+                for (PlayerFetch player : pfu.getPlayers()) {
+                    if (
+                        message.getString().contains(player.name) ||
+                        (player.nickname != null && message.getString().contains(player.nickname))
+                    ) {
+                        foundplayer = player;
+                        break;
+                    }
+                }
+                
+                if(foundplayer != null) {
+                    out.append(message.copy().withStyle(message.getStyle().withHoverEvent(
+                        new HoverEvent.ShowText(Component.empty()
+                            .append(Component.literal(foundplayer.name).withStyle(Style.EMPTY.withBold(true)))
+                            .append(Component.literal( (foundplayer.nickname!=null?" ("+foundplayer.nickname+")":"") + "\n" ).setStyle(Style.EMPTY.withColor(ChatFormatting.GRAY)))
+                            .append(Component.literal(String.format("%d, %d, %d in %s\n",foundplayer.x,foundplayer.y,foundplayer.z, minimap.prettyDimensionName(foundplayer.world))))
+                            .append(Component.literal(
+                                foundplayer.isAFK 
+                                ? String.format("AFK for %d mins", (Instant.now().toEpochMilli() - Instant.parse(foundplayer.afksince).toEpochMilli()) / 60000)
+                                : "Currently Active" 
+                            )
+                        )
+                        )
+                    )));
+                } else {
+                    out.append(message);
+                }
+            }
+        }
+        return out;
+    }
+
     private ModifyGame messageRunner = (message, overlay) -> {
-        if(sp.orwellMeter == OrwellianMeter.ALL) return message;
+        if(!sp.showInOtherPlaces && !pfu.isInPVC()) {
+            return message;
+        }
+        
+        // If a game chat message
+        if(message.getContents() instanceof TranslatableContents translatable) {
+            // Helpfully, PVC's chat system adds this in for anti-chat reporting. Thank you Nem <3
+            // P.S Please don't change it
+            if(translatable.getKey().equals("%s")) { 
+                System.out.println(message);
+                return addPlayerDetailsToChat(message);
+            }
+        }
+        
+        System.out.println("Original: "+message);
+        if(sp.orwellMeter == OrwellianMeter.ALL) {
+            Component out = message;
+            System.out.println(out);
+            return out;
+        }
         // Orwell message types:
         
         String text = message.getString();
@@ -412,7 +537,7 @@ public class PVCMapperModClient implements ClientModInitializer {
                     return message;
                 }
             }
-            return message.copy().withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("This bot message wasn't included in the Mapper's orwell-muting database.\nThink it should be? Send Larry a DM!\nInclude the *exact* content!"))));
+            return message;
         }
         return message;
     };

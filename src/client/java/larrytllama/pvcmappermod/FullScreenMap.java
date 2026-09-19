@@ -25,7 +25,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
 import java.time.Instant;
@@ -71,9 +72,7 @@ public class FullScreenMap extends Screen {
         FullScreenMap fsm = new FullScreenMap(title);
         fsm.pfu = pfu;
         fsm.sp = sp;
-        // We will allow max level 11 on the full screen map but allow minimap to make the most of it all!
-        // (mouse dragging goes weird after that point for some reason. TODO)
-        fsm.zoomlevel = Math.min(11, sp.miniMapZoom); 
+        fsm.zoomlevel = Math.min(15, sp.miniMapZoom); 
 
         pfu.fetchNetworksAsync().thenAccept(networks -> {
             fsm.allNetworks = networks;
@@ -121,11 +120,12 @@ public class FullScreenMap extends Screen {
     private int topLeftX = 0;
     private int topLeftZ = 0;
     public int zoomlevel = 8;
-    public int maxZoomLevel = 11;
+    public int maxZoomLevel = 15;
     public int minZoomLevel = 1;
 
-    public int x = 0;
-    public int z = 0;
+    public double x = 0;
+    public double z = 0;
+    
     public int minimapTileSize = 120;
 
     Map<String, ResIdentifier> tiles = new HashMap<>();
@@ -137,11 +137,11 @@ public class FullScreenMap extends Screen {
 
     private boolean drawSponsorTooltip = false;
 
-    int lastMouseX = 0;
-    int lastMouseY = 0;
+    double lastMouseX = 0;
+    double lastMouseY = 0;
 
     // On mouse move, we'll check for new tiles
-    private void onMouseMove(int mouseX, int mouseY) {
+    private void onMouseMove(double mouseX, double mouseY) {
         int renderZoom = Math.min(8, zoomlevel);
         int renderTileSize = 1 << (17 - renderZoom);
         int tilesize = 1 << (17 - zoomlevel);
@@ -172,32 +172,13 @@ public class FullScreenMap extends Screen {
             }
         }
     }
-
-    private int altZoomLevel = 8;
-
     public ArrayList<ClaimMarkers> shownClaims = new ArrayList<ClaimMarkers>();
-    private Checkbox claimsCheckbox;
-
     public void resetClaims() {
         int tilesize = 1 << (17 - zoomlevel);
         double scale = (double) minimapTileSize / tilesize;
-        if (claimsCheckbox.selected()) {
-            if (zoomlevel < 8) {
-                // Disable for safety
-                CompatUtils.addToast(new SystemToast(
-                        SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
-                        Component.literal("Too Many Claims!"),
-                        Component.literal("Zoom in to re-enable claims")));
-                this.removeWidget(claimsCheckbox);
-                Builder checkboxBuilder = Checkbox.builder(Component.literal("Show Claims"), minecraft.font);
-                claimsCheckbox = checkboxBuilder
-                        .pos(this.width - minecraft.font.width("Show Claims") - 25, this.height - 25).build();
-                this.addRenderableWidget(claimsCheckbox);
-                shownClaims = new ArrayList<ClaimMarkers>();
-                return;
-            }
-            LogUtils.debug("Checkbox selected! Finding claims...");
-            shownClaims = pfu.getClaimsInBounds(currentDimension, x, (int) (x + (this.width / scale)), z,
+        if (sp.showClaims) {
+            if (zoomlevel < 8) return;
+            shownClaims = pfu.getClaimsInBounds(currentDimension, (int)x, (int) (x + (this.width / scale)), (int)z,
                     (int) (z + ((this.height - bottomMapOffset) / scale)));
         } else {
             shownClaims = new ArrayList<ClaimMarkers>();
@@ -212,9 +193,9 @@ public class FullScreenMap extends Screen {
         double scale = (double) minimapTileSize / tilesize;
         pfu.fetchFeaturesAsync(
                 currentDimension,
-                x,
+                (int)x,
                 (int) (x + (this.width / scale)),
-                z,
+                (int)z,
                 (int) (z + ((this.height - bottomMapOffset) / scale)))
             .thenAccept(features -> {
                 // Perform bounds calculation on the local 'features' array first to prevent
@@ -250,8 +231,35 @@ public class FullScreenMap extends Screen {
         return super.mouseDragged(mouseButtonEvent, d, e);
     }
 
-    int hasMovedX;
-    int hasMovedZ;
+    double hasMovedX;
+    double hasMovedZ;
+
+    boolean renderContextMenu = false;
+    double contextMenuX;
+    double contextMenuY;
+    int contextMenuWorldX;
+    int contextMenuWorldZ;
+    ArrayList<String> contextMenuItems = new ArrayList<String>(List.of(
+        "Copy Coords",
+        "Copy Coords in Nether/T2",
+        "Copy Coords + Dimension",
+        "Copy Link",
+        "Open on Web",
+        "Centre Map Here"
+    ));
+    int bestContextMenuWidth = 0;
+
+    public String getOppositeDimension(String dimension) {
+        switch (dimension) {
+            case "minecraft_overworld":
+                return "minecraft_the_nether";
+            case "minecraft_the_nether":
+            case "minecraft_terra2":
+                return "minecraft_overworld";
+            default:
+                return "minecraft_unknown";
+        }
+    }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent mbe) {
@@ -260,43 +268,92 @@ public class FullScreenMap extends Screen {
             resetClaims();
             resetFeatures();
         } else {
+
             int tilesize = 1 << (17 - zoomlevel);
             double scale = (double) minimapTileSize / tilesize;
+
+            // Note to self: mbe.isRight() is false no matter what
+            // Why is it like this!?
+            if(mbe.button() == 1 && mbe.y() < this.height-bottomMapOffset) {
+                bestContextMenuWidth = 0;
+                contextMenuX = mbe.x();
+                contextMenuY = mbe.y();
+                contextMenuWorldX = (int) ((contextMenuX / scale) + x);
+                contextMenuWorldZ = (int) ((contextMenuY / scale) + z);
+                contextMenuItems.set(0, String.format("%d, %d", contextMenuWorldX, contextMenuWorldZ));
+                contextMenuItems.set(1, String.format("%d, %d in %s", (int) Math.floor(contextMenuWorldX/8), (int) Math.floor(contextMenuWorldZ/8), pfu.prettyDimensionName(getOppositeDimension(currentDimension))));
+                contextMenuItems.set(2, String.format("%d, %d in %s", contextMenuWorldX, contextMenuWorldZ, pfu.prettyDimensionName(currentDimension)));
+                for (int i = 0; i < contextMenuItems.size(); i++) {
+                    bestContextMenuWidth = Math.max(bestContextMenuWidth, font.width(contextMenuItems.get(i))) + 2;
+                }
+                renderContextMenu = true;
+                return super.mouseReleased(mbe);
+            } else if(renderContextMenu && mbe.button() == 0) {
+                if(mbe.x() > contextMenuX && mbe.x() < contextMenuX + bestContextMenuWidth) {
+                    for (int i = 0; i < contextMenuItems.size(); i++) {
+                        if(mbe.y() > contextMenuY + (i * font.lineHeight) && mbe.y() < contextMenuY + ((i+1) * font.lineHeight)) {
+                            // Perform click action
+                            if(i<3) {
+                                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(contextMenuItems.get(i)), null);
+                            } else if(i==3) { 
+                                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(
+                                    String.format("%s?x=%d&z=%d&dimension=%s", NetworkUtils.BASE_URL, contextMenuWorldX, contextMenuWorldZ, currentDimension)
+                                ), null);
+                            } else if(i==4) CompatUtils.setScreen(Minecraft.getInstance(), new ConfirmLinkScreen(confirmed -> {
+                                if (confirmed) {
+                                    Util.getPlatform().openUri(String.format("%s?x=%d&z=%d&dimension=%s", NetworkUtils.BASE_URL, contextMenuWorldX, contextMenuWorldZ, currentDimension));
+                                }
+                                CompatUtils.setScreen(Minecraft.getInstance(), null);
+                            }, String.format("%s?x=%d&z=%d&dimension=%s", NetworkUtils.BASE_URL, contextMenuWorldX, contextMenuWorldZ, currentDimension), true));
+                            else if(i==5) {
+                                x = (int) (contextMenuWorldX-(this.width / scale) / 2);
+                                z = (int) (contextMenuWorldZ-(this.height / scale) / 2);
+                                onMouseMove(x, z);
+                                resetFeatures();
+                            }
+                        }
+                    }
+                }
+                renderContextMenu = false;
+            }
+
             // Check to see if a thing has been clicked
             for (int i = shownFeatures.length - 1; i >= 0; i--) {
                 if(shownFeatures[i].id == 1) {
                     LogUtils.debug("X/Z: " + ((shownFeatures[i].x - x) * scale) + " / " + ((shownFeatures[i].z - z) * scale));
                 }
                 if(shownFeatures[i].featureType.equals("area")) {
-                    int itemWidth = minecraft.font.width(shownFeatures[i].name);
-                    if( mbe.x() > ((shownFeatures[i].x - x) * scale) - (itemWidth / 2) &&
-                        mbe.x() < ((shownFeatures[i].x - x) * scale) + (itemWidth / 2) &&
-                        mbe.y() > ((shownFeatures[i].z - z) * scale) - (minecraft.font.lineHeight / 2) &&
-                        mbe.y() < ((shownFeatures[i].z - z) * scale) + (minecraft.font.lineHeight / 2)) {
-                        if(mbe.hasControlDown()) {
-                            CompatUtils.setScreen(minecraft, new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
-                        } else {
-                            LogUtils.debug("Feature clicked: " + shownFeatures[i].id);
-                            int index = i;
-                            pfu.fetchAreaAsync(shownFeatures[index].id)
-                                .thenAccept(feature -> {
-                                    overlayFeature = feature;
-                                    overlayItemID = shownFeatures[index].id;
-                                    overlayItemType = "area";
-                                    overlayOpen = true;
-                                    overlayImage = null;
-                                    overlayImageStatus = "Loading...";
-                                    if(overlayFeature.area.image != null) {
-                                        TextureUtils.fetchImmediateRemoteTexture(overlayFeature.area.image, (id) -> {
-                                            overlayImage = id;
+                    if(sp.showAreas) {
+                        int itemWidth = minecraft.font.width(shownFeatures[i].name);
+                        if( mbe.x() > ((shownFeatures[i].x - x) * scale) - (itemWidth / 2) &&
+                            mbe.x() < ((shownFeatures[i].x - x) * scale) + (itemWidth / 2) &&
+                            mbe.y() > ((shownFeatures[i].z - z) * scale) - (minecraft.font.lineHeight / 2) &&
+                            mbe.y() < ((shownFeatures[i].z - z) * scale) + (minecraft.font.lineHeight / 2)) {
+                            if(mbe.hasControlDown()) {
+                                CompatUtils.setScreen(minecraft, new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
+                            } else {
+                                LogUtils.debug("Feature clicked: " + shownFeatures[i].id);
+                                int index = i;
+                                pfu.fetchAreaAsync(shownFeatures[index].id)
+                                    .thenAccept(feature -> {
+                                        overlayFeature = feature;
+                                        overlayItemID = shownFeatures[index].id;
+                                        overlayItemType = "area";
+                                        overlayOpen = true;
+                                        overlayImage = null;
+                                        overlayImageStatus = "Loading...";
+                                        if(overlayFeature.area.image != null) {
+                                            TextureUtils.fetchImmediateRemoteTexture(overlayFeature.area.image, (id) -> {
+                                                overlayImage = id;
+                                                overlayImageStatus = "No image available";
+                                            });
+                                        } else {
                                             overlayImageStatus = "No image available";
-                                        });
-                                    } else {
-                                        overlayImageStatus = "No image available";
-                                    }
-                                });
-                        }
+                                        }
+                                    });
+                            }
 
+                        }
                     }
                 } else {
                     if( mbe.x() > ((shownFeatures[i].x - x) * scale) - 4 &&
@@ -306,9 +363,9 @@ public class FullScreenMap extends Screen {
                         int index = i;
                         switch (shownFeatures[i].featureType) {
                             case "place":
-                                if(mbe.hasControlDown()) {
+                                if(mbe.hasControlDown() && sp.showPlaces) {
                                     CompatUtils.setScreen(minecraft, new ChatScreen(String.format("%s: %d, %d in %s", shownFeatures[i].name, (int) shownFeatures[i].x, (int) shownFeatures[i].z, pfu.prettyDimensionName(currentDimension)), false));
-                                } else {
+                                } else if (sp.showPlaces) {
                                     pfu.fetchPlaceAsync(shownFeatures[index].id)
                                         .thenAccept(feature -> {
                                             overlayFeature = feature;
@@ -449,6 +506,16 @@ public class FullScreenMap extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent mbe, boolean bl) {
+        if(renderContextMenu) {
+            if(!(
+                mbe.x() > contextMenuX && 
+                mbe.x() < contextMenuX + bestContextMenuWidth && 
+                mbe.y() > contextMenuY && 
+                mbe.y() < contextMenuY + (font.lineHeight * contextMenuItems.size()) + 1
+            )) {
+                renderContextMenu = false;
+            } 
+        }
         isMouseDown = true;
         hasMovedX = x;
         hasMovedZ = z;
@@ -476,13 +543,14 @@ public class FullScreenMap extends Screen {
     public void drawPlayerTooltip(/*? if <26.1 {*/GuiGraphics/*?} else {*//*GuiGraphicsExtractor*//*?}*/ context, PlayerFetch player, int x, int y) {
 
         List<MutableComponent> content = List.of(
-                Component.literal(player.name)
-                    .withStyle(Style.EMPTY.withBold(true))
-                    .append(
-                        Component.literal(player.afksince != null && ((Instant.now().toEpochMilli() - Instant.parse(player.afksince).toEpochMilli()) / 60000) > 2 ? " (AFK)" : "").withStyle(Style.EMPTY.withColor(ChatFormatting.RED))
-                    ),
+                Component.literal(player.name).withStyle(ChatFormatting.BOLD),
                 Component.literal(player.x + ", " + player.z + " - " + pfu.prettyDimensionName(player.world)),
-                Component.literal("Health: " + (player.health / 2) + "/10 - Armor: " + (player.armor / 2) + "/10"));
+                Component.literal("Health: " + (player.health / 2) + "/10 - Armor: " + (player.armor / 2) + "/10"),
+                player.afksince != null && 
+                    ((Instant.now().toEpochMilli() - Instant.parse(player.afksince).toEpochMilli()) / 60000) > 2 
+                    ? Component.literal(String.format("AFK for %d mins", (Instant.now().toEpochMilli() - Instant.parse(player.afksince).toEpochMilli()) / 60000)) 
+                    : Component.literal("Currently Active")
+            );
         
         MapRenderUtils.drawTooltipComponent(context, content, x + TooltipRenderUtil.PADDING_LEFT, y + TooltipRenderUtil.PADDING_TOP);
         if (hoverPlayerName != player.name) {
@@ -512,6 +580,8 @@ public class FullScreenMap extends Screen {
             "textures/gui/settings.png");
     private final ResIdentifier compassIcon = ResIdentifier.of("minecraft",
             "textures/item/compass_19.png");
+    private final ResIdentifier hopperIcon = ResIdentifier.of("minecraft",
+            "textures/item/hopper.png");
 
     private final ResIdentifier OVERWORLD = ResIdentifier.of("minecraft", "overworld");
     private final ResIdentifier NETHER = ResIdentifier.of("minecraft", "the_nether");
@@ -524,13 +594,15 @@ public class FullScreenMap extends Screen {
         int tilesize = 1 << (17 - zoomlevel);
         double scale = (double) minimapTileSize / tilesize;
 
-        transportNetwork.recalculate(allNetworks, currentDimension, zoomlevel, minimapTileSize, x, z, (this.width / scale), ((this.height - bottomMapOffset) / scale), "FullScreenMap");
+        transportNetwork.recalculate(allNetworks, currentDimension, zoomlevel, minimapTileSize, x, z, this.width, this.height - bottomMapOffset, "FullScreenMap");
     }
 
     public String currentDimension = getDimensionID();
 
-    int lastX = 0;
-    int lastZ = 0;
+    public boolean showFilters = false;
+
+    double lastX = 0;
+    double lastZ = 0;
 
     //? if <26.1 {
     @Override
@@ -688,129 +760,134 @@ public class FullScreenMap extends Screen {
             }
 
             // Draw networks first
-            if(this.lastX != this.x || this.lastZ != this.z) {
-                recalculateNetworks();
-            }
-            this.lastX = this.x;
-            this.lastZ = this.z;
-            for (int i = 0; i < transportNetwork.getSegments().size(); i++) {
-                TransportNetwork.Segment line = transportNetwork.getSegments().get(i);
-                MapRenderUtils.drawLine(context, (int)line.coords[0][0], (int)line.coords[0][1], (int)line.coords[1][0], (int)line.coords[1][1], line.colour);
-            }
-
-            int networkLinePadding = 75;
-
-            // Draw street names on top
-            if(zoomlevel > 9) {
-                for (int i = 0; i<transportNetwork.getSegments().size();i++) {
+            if(sp.showNetworks) {
+                if(this.lastX != this.x || this.lastZ != this.z) {
+                    recalculateNetworks();
+                }
+                this.lastX = this.x;
+                this.lastZ = this.z;
+                for (int i = 0; i < transportNetwork.getSegments().size(); i++) {
                     TransportNetwork.Segment line = transportNetwork.getSegments().get(i);
-                    int nameLength = minecraft.font.width(line.streetName) / 2;
-                    double[][] coords = line.coords;
+                    MapRenderUtils.drawLine(context, (int)line.coords[0][0], (int)line.coords[0][1], (int)line.coords[1][0], (int)line.coords[1][1], line.colour);
+                }
 
-                    // Figure out how many we can fit along, with padding on either side.
-                    double lineLength = Math.sqrt( 
-                            Math.pow(
-                                Math.max(coords[0][1], coords[1][1]) - Math.min(coords[1][1], coords[0][1]), 
-                            (double)(2)) + Math.pow(
-                                Math.max(coords[1][0], coords[0][0]) - Math.min(coords[1][0], coords[0][0]),
-                            (double)(2))
-                        );
-                    int numberToDraw = (int)Math.floor(lineLength / (nameLength + (networkLinePadding) / scale));
-                    
-                    while(numberToDraw > 0) {
-                        context.pose().pushMatrix();
-                        context.pose().translate((float) (coords[0][0]), (float) (coords[0][1]));
-                        context.pose().rotate((float)Math.toRadians(line.lineBearing));
-                        if(numberToDraw * (networkLinePadding + (line.nameWidth / 2)) > lineLength) {
+                int networkLinePadding = 75;
+
+                // Draw street names on top
+                if(zoomlevel > 9) {
+                    for (int i = 0; i<transportNetwork.getSegments().size();i++) {
+                        TransportNetwork.Segment line = transportNetwork.getSegments().get(i);
+                        int nameLength = minecraft.font.width(line.streetName) / 2;
+                        double[][] coords = line.coords;
+
+                        // Figure out how many we can fit along, with padding on either side.
+                        double lineLength = Math.sqrt( 
+                                Math.pow(
+                                    Math.max(coords[0][1], coords[1][1]) - Math.min(coords[1][1], coords[0][1]), 
+                                (double)(2)) + Math.pow(
+                                    Math.max(coords[1][0], coords[0][0]) - Math.min(coords[1][0], coords[0][0]),
+                                (double)(2))
+                            );
+                        int numberToDraw = (int)Math.floor(lineLength / (nameLength + (networkLinePadding) / scale));
+                            
+                        while(numberToDraw > 0) {
+                            context.pose().pushMatrix();
+                            context.pose().translate((float) (coords[0][0]), (float) (coords[0][1]));
+                            context.pose().rotate((float)Math.toRadians(line.lineBearing));
+                            if(numberToDraw * (networkLinePadding + (line.nameWidth / 2)) > lineLength) {
+                                context.pose().popMatrix();
+                                numberToDraw -= 1;
+                                continue;
+                            }
+                            context.pose().translate((float)(numberToDraw * (networkLinePadding + (line.nameWidth / 2))), 0);
+                            //context.pose().rotate(-(float)Math.toRadians(line.lineBearing));
+                            if(line.lineBearing > 90 && line.lineBearing < 270) context.pose().rotate((float)Math.toRadians(-180));
+                            context.pose().scale((float) 0.5, (float) 0.5);
+                            context.fill(-(line.nameWidth / 2) - 2, -2, (line.nameWidth / 2) + 2, minecraft.font.lineHeight + 2, 0x80000000);
+                            GraphicsHelper.drawCenteredString(context, minecraft.font, line.streetName, 0, 0, 0xFFFFFFFF);
                             context.pose().popMatrix();
-                            numberToDraw -= 1;
-                            continue;
+                            numberToDraw-=1;
                         }
-                        context.pose().translate((float)(numberToDraw * (networkLinePadding + (line.nameWidth / 2))), 0);
-                        //context.pose().rotate(-(float)Math.toRadians(line.lineBearing));
-                        if(line.lineBearing > 90 && line.lineBearing < 270) context.pose().rotate((float)Math.toRadians(-180));
-                        context.pose().scale((float) 0.5, (float) 0.5);
-                        context.fill(-(line.nameWidth / 2) - 2, -2, (line.nameWidth / 2) + 2, minecraft.font.lineHeight + 2, 0x80000000);
-                        GraphicsHelper.drawCenteredString(context, minecraft.font, line.streetName, 0, 0, 0xFFFFFFFF);
+                    }
+                }
+            }
+            // Draw claims
+            if(sp.showClaims) {
+                for (int i = 0; i < shownClaims.size(); i++) {
+                    ClaimMarkers claim = shownClaims.get(i);
+                    if (claim.type.equals("rectangle")) {
+                        context.pose().pushMatrix();
+                        context.pose().translate((float) ((claim.points[0].x - x) * scale),
+                                (float) ((claim.points[0].z - z) * scale));
+                        context.fill(0, 0, (int) ((claim.points[1].x - claim.points[0].x) * scale),
+                                (int) ((claim.points[1].z - claim.points[0].z) * scale),
+                                (int) Long.parseLong(String.format("%02X%s", Math.round(claim.fillOpacity * 255f),
+                                        claim.fillColor.substring(1)), 16));
+
+                        // Draw outlines
+                        int outlineColor = (int) Long.parseLong("ff" + claim.color.substring(1), 16);
+                        int width = (int) ((claim.points[1].x - claim.points[0].x) * scale);
+                        int height = (int) ((claim.points[1].z - claim.points[0].z) * scale);
+                        // Left
+                        GraphicsHelper.vLine(context, 0, 0, height, outlineColor);
+                        // Right
+                        GraphicsHelper.vLine(context, width, 0, height, outlineColor);
+                        // Top
+                        GraphicsHelper.hLine(context, 0, width, 0, outlineColor);
+                        // Bottom
+                        GraphicsHelper.hLine(context, 0, width, height, outlineColor);
                         context.pose().popMatrix();
-                        numberToDraw-=1;
+                        // context.submitOutline((int)((claim.points[0].x - x) * scale),
+                        // (int)((claim.points[0].z - z) * scale), (int)((claim.points[1].x -
+                        // claim.points[0].x) * scale) + 1, (int)((claim.points[1].z -
+                        // claim.points[0].z) * scale) + 1, (int) Long.parseLong("ff" +
+                        // claim.color.substring(1), 16));
                     }
                 }
             }
 
-            // Draw claims
-            for (int i = 0; i < shownClaims.size(); i++) {
-                ClaimMarkers claim = shownClaims.get(i);
-                if (claim.type.equals("rectangle")) {
-                    context.pose().pushMatrix();
-                    context.pose().translate((float) ((claim.points[0].x - x) * scale),
-                            (float) ((claim.points[0].z - z) * scale));
-                    context.fill(0, 0, (int) ((claim.points[1].x - claim.points[0].x) * scale),
-                            (int) ((claim.points[1].z - claim.points[0].z) * scale),
-                            (int) Long.parseLong(String.format("%02X%s", Math.round(claim.fillOpacity * 255f),
-                                    claim.fillColor.substring(1)), 16));
-
-                    // Draw outlines
-                    int outlineColor = (int) Long.parseLong("ff" + claim.color.substring(1), 16);
-                    int width = (int) ((claim.points[1].x - claim.points[0].x) * scale);
-                    int height = (int) ((claim.points[1].z - claim.points[0].z) * scale);
-                    // Left
-                    GraphicsHelper.vLine(context, 0, 0, height, outlineColor);
-                    // Right
-                    GraphicsHelper.vLine(context, width, 0, height, outlineColor);
-                    // Top
-                    GraphicsHelper.hLine(context, 0, width, 0, outlineColor);
-                    // Bottom
-                    GraphicsHelper.hLine(context, 0, width, height, outlineColor);
-                    context.pose().popMatrix();
-                    // context.submitOutline((int)((claim.points[0].x - x) * scale),
-                    // (int)((claim.points[0].z - z) * scale), (int)((claim.points[1].x -
-                    // claim.points[0].x) * scale) + 1, (int)((claim.points[1].z -
-                    // claim.points[0].z) * scale) + 1, (int) Long.parseLong("ff" +
-                    // claim.color.substring(1), 16));
-                }
-            }
-
             // Draw area bounds on hover before place labels
-            try {
-            if(!isMouseDown && !isChangingFeatures && hoveredPlaceIndex != -1 && hoveredPlaceIndex < shownFeatures.length && 
-                shownFeatures[hoveredPlaceIndex].featureType.equals("area") &&
-                shownFeatures[hoveredPlaceIndex].bounds != null) { 
-                int boundlength = shownFeatures[hoveredPlaceIndex].bounds.length;
-                for (int bound = 0; bound < boundlength  - 1; bound++) {
-                    if( shownFeatures[hoveredPlaceIndex].bounds != null &&
-                        shownFeatures[hoveredPlaceIndex].bounds[bound].length == 2
-                    ) MapRenderUtils.drawLine(context,
-                        (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound][1] - x)*scale),
-                        (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound][0] - z)*scale),
-                        (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound + 1][1] - x)*scale),
-                        (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound + 1][0] - z)*scale),
-                        0xFFFF0000
-                    );
+            if(sp.showAreas) {
+                try {
+                    if(!isMouseDown && !isChangingFeatures && hoveredPlaceIndex != -1 && hoveredPlaceIndex < shownFeatures.length && 
+                        shownFeatures[hoveredPlaceIndex].featureType.equals("area") &&
+                        shownFeatures[hoveredPlaceIndex].bounds != null) { 
+                        int boundlength = shownFeatures[hoveredPlaceIndex].bounds.length;
+                        for (int bound = 0; bound < boundlength  - 1; bound++) {
+                            if( shownFeatures[hoveredPlaceIndex].bounds != null &&
+                                shownFeatures[hoveredPlaceIndex].bounds[bound].length == 2
+                            ) MapRenderUtils.drawLine(context,
+                                (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound][1] - x)*scale),
+                                (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound][0] - z)*scale),
+                                (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound + 1][1] - x)*scale),
+                                (int) ((shownFeatures[hoveredPlaceIndex].bounds[bound + 1][0] - z)*scale),
+                                0xFFFF0000
+                            );
+                        }
+                        // Draw one to connect it back up too
+                        if(shownFeatures[hoveredPlaceIndex].bounds.length == boundlength) MapRenderUtils.drawLine(context,
+                            (int) ((shownFeatures[hoveredPlaceIndex].bounds[boundlength - 1][1] - x)*scale),
+                            (int) ((shownFeatures[hoveredPlaceIndex].bounds[boundlength - 1][0] - z)*scale),
+                            (int) ((shownFeatures[hoveredPlaceIndex].bounds[0][1] - x)*scale),
+                            (int) ((shownFeatures[hoveredPlaceIndex].bounds[0][0] - z)*scale),
+                            0xFFFF0000
+                        );
+                    } 
+                } catch(Exception e) {
+                    // I don't care, I'm losing it with the errors in this aaAAa-
                 }
-                // Draw one to connect it back up too
-                if(shownFeatures[hoveredPlaceIndex].bounds.length == boundlength) MapRenderUtils.drawLine(context,
-                    (int) ((shownFeatures[hoveredPlaceIndex].bounds[boundlength - 1][1] - x)*scale),
-                    (int) ((shownFeatures[hoveredPlaceIndex].bounds[boundlength - 1][0] - z)*scale),
-                    (int) ((shownFeatures[hoveredPlaceIndex].bounds[0][1] - x)*scale),
-                    (int) ((shownFeatures[hoveredPlaceIndex].bounds[0][0] - z)*scale),
-                    0xFFFF0000
-                );
-            } }
-            catch(Exception e) {
-                // I don't care, I'm losing it with the errors in this aaAAa-
             }
 
             // Draw places
             for (int i = 0; i < shownFeatures.length; i++) {
                 FeatureFetch feature = shownFeatures[i];
-                if (feature.featureType.equals("place")) {
+                if (feature.featureType.equals("place") && sp.showPlaces) {
                     context.pose().pushMatrix();
                     context.pose().translate((float) ((feature.x - x) * scale), (float) ((feature.z - z) * scale));
                     context.pose().translate(-4, -4);
                     context.blit(RenderPipelines.GUI_TEXTURED, pfu.getPlaceIcon(feature.type).get(), 0, 0, 0, 0, 8, 8, 8, 8);
                     context.pose().popMatrix();
-                } else if (feature.featureType.equals("area")) {
+                } else if (feature.featureType.equals("area") && sp.showAreas) {
                     context.pose().pushMatrix();
                     context.pose().translate((float) ((feature.x - x) * scale), (float) ((feature.z - z) * scale));
                     context.pose().scale((float) 0.5, (float) 0.5);
@@ -818,7 +895,7 @@ public class FullScreenMap extends Screen {
                             (minecraft.font.width(feature.name) / 2) + 2, minecraft.font.lineHeight + 2, 0x80000000);
                     GraphicsHelper.drawCenteredString(context, minecraft.font, feature.name, 0, 0, 0xFFFFFFFF);
                     context.pose().popMatrix();
-                } else if (feature.featureType.equals("portal")) {
+                } else if (feature.featureType.equals("portal")) { // TODO: Show portals filter
                     context.pose().pushMatrix();
                     context.pose().translate((float) ((feature.x - x) * scale), (float) ((feature.z - z) * scale));
                     context.pose().translate(-4, -4);
@@ -827,63 +904,65 @@ public class FullScreenMap extends Screen {
                 }
             }
 
-            PlayerFetch hoveredPlayer = null;
             // Draw players
-            ArrayList<PlayerFetch> playersList = pfu.getPlayers();
-            for (int i = 0; i < playersList.size(); i++) {
-                PlayerFetch player = playersList.get(i);
-                if (minecraft.player.getName() == Component.literal(player.name))
-                    continue;
-                // Calculate the player's Effective X/Z coordinates for the map's current dimension.
-                // This must be done BEFORE checking if they are within the screen bounds (worldLeft/worldRight),
-                // otherwise players in the Nether will be skipped when zoomed in on the Overworld.
-                double effectiveX = player.x;
-                double effectiveZ = player.z;
+            PlayerFetch hoveredPlayer = null;
+            if (sp.showPlayers) {
+                ArrayList<PlayerFetch> playersList = pfu.getPlayers();
+                for (int i = 0; i < playersList.size(); i++) {
+                    PlayerFetch player = playersList.get(i);
+                    if (minecraft.player.getName() == Component.literal(player.name))
+                        continue;
+                    // Calculate the player's Effective X/Z coordinates for the map's current dimension.
+                    // This must be done BEFORE checking if they are within the screen bounds (worldLeft/worldRight),
+                    // otherwise players in the Nether will be skipped when zoomed in on the Overworld.
+                    double effectiveX = player.x;
+                    double effectiveZ = player.z;
 
-                if (!currentDimension.equals(player.world)) {
-                    if (currentDimension.equals("minecraft_overworld")) {
-                        effectiveX = player.x * 8;
-                        effectiveZ = player.z * 8;
-                    } else {
-                        effectiveX = player.x / 8;
-                        effectiveZ = player.z / 8;
+                    if (!currentDimension.equals(player.world)) {
+                        if (currentDimension.equals("minecraft_overworld")) {
+                            effectiveX = player.x * 8;
+                            effectiveZ = player.z * 8;
+                        } else {
+                            effectiveX = player.x / 8;
+                            effectiveZ = player.z / 8;
+                        }
                     }
-                }
 
-                if ((effectiveX > worldLeft && effectiveX < worldRight)
-                        && (effectiveZ > worldTop && effectiveZ < worldBottom)) {
-                    context.pose().pushMatrix();
-                    float offsetFromLeft = (float) ((effectiveX - worldLeft) * scale);
-                    float offsetFromTop = (float) ((effectiveZ - worldTop) * scale);
-                    context.pose().translate(offsetFromLeft, offsetFromTop);
+                    if ((effectiveX > worldLeft && effectiveX < worldRight)
+                            && (effectiveZ > worldTop && effectiveZ < worldBottom)) {
+                        context.pose().pushMatrix();
+                        float offsetFromLeft = (float) ((effectiveX - worldLeft) * scale);
+                        float offsetFromTop = (float) ((effectiveZ - worldTop) * scale);
+                        context.pose().translate(offsetFromLeft, offsetFromTop);
 
-                    context.pose().rotate((float) Math.toRadians(player.yaw - 180));
-                    context.pose().translate(-4, -4);
-                    ResIdentifier playerMarkerChoice;
-                    if(minecraft.player.getName().equals(Component.literal(player.name))) {
-                        playerMarkerChoice = pfu.THIS_PLAYER;
-                    } else {
-                        switch (player.world) {
-                            case "minecraft_overworld":
-                                playerMarkerChoice = pfu.OTHER_PLAYERS_OW;
+                        context.pose().rotate((float) Math.toRadians(player.yaw - 180));
+                        context.pose().translate(-4, -4);
+                        ResIdentifier playerMarkerChoice;
+                        if(minecraft.player.getName().equals(Component.literal(player.name))) {
+                            playerMarkerChoice = pfu.THIS_PLAYER;
+                        } else {
+                            switch (player.world) {
+                                case "minecraft_overworld":
+                                    playerMarkerChoice = pfu.OTHER_PLAYERS_OW;
+                                    break;
+                                case "minecraft_the_nether":
+                                playerMarkerChoice = pfu.OTHER_PLAYERS_NETHER;
                                 break;
-                            case "minecraft_the_nether":
-                            playerMarkerChoice = pfu.OTHER_PLAYERS_NETHER;
-                            break;
-                        default:
-                            playerMarkerChoice = pfu.OTHER_PLAYERS_SOMEWHERE;
-                            break;
-                    }
-                    }
-                    context.blit(
-                            RenderPipelines.GUI_TEXTURED,
-                            playerMarkerChoice.get(),
-                            0, 0, 0, 0, 8, 8, 8, 8);
-                    context.pose().popMatrix();
+                            default:
+                                playerMarkerChoice = pfu.OTHER_PLAYERS_SOMEWHERE;
+                                break;
+                        }
+                        }
+                        context.blit(
+                                RenderPipelines.GUI_TEXTURED,
+                                playerMarkerChoice.get(),
+                                0, 0, 0, 0, 8, 8, 8, 8);
+                        context.pose().popMatrix();
 
-                    if (mouseX > offsetFromLeft - 4 && mouseX < offsetFromLeft + 4 && mouseY > offsetFromTop - 4
-                            && mouseY < offsetFromTop + 4) {
-                        hoveredPlayer = player;
+                        if (mouseX > offsetFromLeft - 4 && mouseX < offsetFromLeft + 4 && mouseY > offsetFromTop - 4
+                                && mouseY < offsetFromTop + 4) {
+                            hoveredPlayer = player;
+                        }
                     }
                 }
             }
@@ -893,11 +972,10 @@ public class FullScreenMap extends Screen {
             if(coords == null) coords = Component.literal("--, --");
             context.fill(2, this.height - bottomMapOffset - minecraft.font.lineHeight - 4, 6 + minecraft.font.width(coords.getString()), this.height - bottomMapOffset - 1, 0xB0000000);
             GraphicsHelper.drawString(context, minecraft.font, currentLocationCoordinates, 4, this.height - bottomMapOffset - minecraft.font.lineHeight - 2, 0xFFFFFFFF);
-
             context.scissorStack.pop();
 
             // Tooltips
-            if (hoveredPlayer != null) {
+            if (hoveredPlayer != null && sp.showPlayers) {
                 // Players
                 drawPlayerTooltip(context, hoveredPlayer, mouseX, mouseY);
             } else if (hoveredPlaceIndex != -1 && hoveredPlaceIndex < shownFeatures.length) {
@@ -907,27 +985,34 @@ public class FullScreenMap extends Screen {
                     pfu.getPortalPrettyName(shownFeatures[hoveredPlaceIndex].type) :
                     "Click to view details...";
                 String placeId;
+                boolean showTooltip = false;
                 // "Hell yeah, he uses switch/cases. +10 aura points"
                 switch (shownFeatures[hoveredPlaceIndex].featureType) {
                     case "place":
                         placeId = "P" + shownFeatures[hoveredPlaceIndex].id;
+                        if (sp.showPlaces) showTooltip = true;
                         break;
                     case "area":
                         placeId = "A" + shownFeatures[hoveredPlaceIndex].id;
+                        if (sp.showAreas) showTooltip = true;
                         break;
                     case "portal":
                         placeId = "SP" + shownFeatures[hoveredPlaceIndex].id;
+                        showTooltip = true;
+                        // TODO: Filter for portals
                         break;
                     default:
                         placeId = "" + shownFeatures[hoveredPlaceIndex].id;
+                        showTooltip = true;
+                        // TODO: Filter for whatever these are ¯\_(ツ)_/¯
                         break;
                 }
-                MapRenderUtils.drawTooltipComponent(context, List.of(
+                if(showTooltip) MapRenderUtils.drawTooltipComponent(context, List.of(
                     Component.literal(placeName).append(Component.literal(" (" + placeId + ")").withStyle(ChatFormatting.GRAY)),
                     Component.literal(subText).withStyle(ChatFormatting.ITALIC, ChatFormatting.GRAY),
                     Component.literal("Ctrl+Click to share Coords").withStyle(ChatFormatting.ITALIC, ChatFormatting.GRAY)),
                     mouseX + 7, mouseY + 4);
-            } else if(hoveredClaimIndex != -1 && hoveredClaimIndex < shownClaims.size()) {
+            } else if(hoveredClaimIndex != -1 && hoveredClaimIndex < shownClaims.size() && sp.showClaims) {
                 // And claims
                 String claimHoverOwner = shownClaims.get(hoveredClaimIndex).popup.substring(32).replace("</span>", "");
                 MapRenderUtils.drawTooltipComponent(context, List.of(
@@ -946,6 +1031,10 @@ public class FullScreenMap extends Screen {
                 GraphicsHelper.drawString(context, Minecraft.getInstance().font, "Loading banner...", 10, this.height - 30, 0xFFFFFFFF);
             }
 
+            if(showFilters) {
+                GraphicsHelper.drawTooltipBackground(context, 30, 90, 30 + minecraft.font.width("Networks"), 120);
+            }
+
             // Draw button builders
             //? if <26.1 {
             super.render(context, mouseX, mouseY, delta);
@@ -955,13 +1044,63 @@ public class FullScreenMap extends Screen {
             context.blit(RenderPipelines.GUI_TEXTURED, searchIcon.get(), this.width - 21, 9, 0, 0, 12, 12, 12, 12);
             context.blit(RenderPipelines.GUI_TEXTURED, settingsIcon.get(), this.width - 21, 34, 0, 0, 12, 12, 12, 12);
             context.blit(RenderPipelines.GUI_TEXTURED, compassIcon.get(), this.width - 21, this.height - bottomMapOffset - 21, 0, 0, 12, 12, 12, 12);
+            context.blit(RenderPipelines.GUI_TEXTURED, hopperIcon.get(), 9, 94, 0, 0, 12, 12, 12, 12);
 
             // Zoom level number
             context.blit(RenderPipelines.GUI_TEXTURED,
                     ResIdentifier.of("minecraft", "textures/gui/sprites/widget/checkbox.png").get(),
                     5, 30, 0, 0, 20, 20, 20, 20);
             GraphicsHelper.drawCenteredString(context, minecraft.font, String.format("%d", zoomlevel), 15, 35, 0xFFFFFFFF);
+
+            if(renderContextMenu) {
+                context.pose().pushMatrix();
+                context.pose().translate((float)contextMenuX, (float)contextMenuY);
+                context.fill(0, -1, bestContextMenuWidth, (contextMenuItems.size() * font.lineHeight) + 2,  0xaa3a3a3a);
+                for (int i = 0; i < contextMenuItems.size(); i++) {
+                    if (mouseX > contextMenuX && mouseX < contextMenuX + bestContextMenuWidth &&
+                        mouseY > contextMenuY + (i*font.lineHeight) && mouseY < contextMenuY + (i*font.lineHeight) + font.lineHeight) {
+                        context.fill(0, (i*font.lineHeight) -1, bestContextMenuWidth, (i*font.lineHeight) + font.lineHeight -1, 0x3a000000);
+                    }
+
+                    GraphicsHelper.drawString(context, font, contextMenuItems.get(i), (bestContextMenuWidth / 2) - (font.width( contextMenuItems.get(i)) / 2), i * font.lineHeight, 0xFFFFFFFF);
+                }
+
+                context.pose().popMatrix();
+            }
         }
+    }
+
+    private void changeMapScale(int zoomDelta, double coordScale) {
+        int oldtilesize = 1 << (17 - zoomlevel);
+        double oldscale = (double) minimapTileSize / oldtilesize;
+        double cx = x + (this.width / 2.0) / oldscale;
+        double cz = z + (this.height / 2.0) / oldscale;
+
+        cx *= coordScale;
+        cz *= coordScale;
+        zoomlevel = Math.max(minZoomLevel, Math.min(maxZoomLevel, zoomlevel + zoomDelta));
+
+        int newtilesize = 1 << (17 - zoomlevel);
+        double newscale = (double) minimapTileSize / newtilesize;
+        x = (int) (cx - (this.width / 2.0) / newscale);
+        z = (int) (cz - (this.height / 2.0) / newscale);
+    }
+
+    private static final String[] DIMENSION_CYCLE = {
+        "minecraft_overworld",
+        "minecraft_the_nether",
+        "minecraft_terra2"
+        // "minecraft_the_end" can be added here
+    };
+
+    private double getDimensionCoordinateScale(String dimension) {
+        // Defines the coordinate scale relative to the Overworld
+        return dimension.equals("minecraft_the_nether") ? 8.0 : 1.0;
+    }
+
+    private int getDimensionZoomOffset(String dimension) {
+        // Defines the base zoom offset relative to the Overworld
+        return dimension.equals("minecraft_the_nether") ? 3 : 0;
     }
 
     public String getDimensionID() {
@@ -971,7 +1110,41 @@ public class FullScreenMap extends Screen {
 
     @Override
     protected void init() {
+        showFilters = false;
         currentDimension = "minecraft_" + CompatUtils.getIdentifier(Minecraft.getInstance().level.dimension()).getPath();
+        Button filtersSave = Button.builder(Component.literal("Save"), (btn) -> {
+            sp.saveSettings();
+            btn.active = false;
+        }).bounds(30, 190, 30 + minecraft.font.width("Networks"), 20).tooltip(Tooltip.create(Component.literal("Save filters so they appear on the minimap."))).build();
+        filtersSave.visible = false;
+        filtersSave.active = false;
+        this.addRenderableWidget(filtersSave);
+        Checkbox placesCheckbox = Checkbox.builder(Component.literal("Places"), minecraft.font).selected(sp.showPlaces).onValueChange((checkbox, bl) -> {sp.showPlaces = bl; filtersSave.active = true;}).pos(30, 90).build();
+        placesCheckbox.visible = false;
+        this.addRenderableWidget(placesCheckbox);
+        Checkbox areasCheckbox = Checkbox.builder(Component.literal("Areas"), minecraft.font).selected(sp.showAreas).onValueChange((checkbox, bl) -> {sp.showAreas = bl; filtersSave.active = true;}).pos(30, 110).build();
+        areasCheckbox.visible = false;
+        this.addRenderableWidget(areasCheckbox);
+        Checkbox networksCheckbox = Checkbox.builder(Component.literal("Networks"), minecraft.font).selected(sp.showNetworks).onValueChange((checkbox, bl) -> {sp.showNetworks = bl; filtersSave.active = true;}).pos(30, 130).build();
+        networksCheckbox.visible = false;
+        this.addRenderableWidget(networksCheckbox);
+        Checkbox playersCheckbox = Checkbox.builder(Component.literal("Players"), minecraft.font).selected(sp.showPlayers).onValueChange((checkbox, bl) -> {sp.showPlayers = bl; filtersSave.active = true;}).pos(30, 150).build();
+        playersCheckbox.visible = false;
+        this.addRenderableWidget(playersCheckbox);
+        Checkbox claimsCheckbox = Checkbox.builder(Component.literal("Claims"), minecraft.font).selected(sp.showClaims).onValueChange((checkbox, bl) -> {sp.showClaims = bl; resetClaims(); filtersSave.active = true;}).pos(30, 170).build();
+        claimsCheckbox.visible = false;
+        this.addRenderableWidget(claimsCheckbox);
+
+        Button filterBtn = Button.builder(Component.nullToEmpty(""), (btn) -> {
+            showFilters = !showFilters;
+            placesCheckbox.visible = showFilters;
+            areasCheckbox.visible = showFilters;
+            networksCheckbox.visible = showFilters;
+            playersCheckbox.visible = showFilters;
+            claimsCheckbox.visible = showFilters;
+            filtersSave.visible = showFilters;
+        }).bounds(5, 90, 20, 20).tooltip(Tooltip.create(Component.literal("Filters"))).build();
+
         Button negZoomBtn = Button.builder(Component.nullToEmpty("-"), (btn) -> {
             // Get current middle
             int oldtilesize = 1 << (17 - zoomlevel);
@@ -1029,41 +1202,36 @@ public class FullScreenMap extends Screen {
             sponsorURLString = banner.link;
         });
 
-        int checkboxX = this.width - minecraft.font.width("Show Claims") - 25;
-        Builder checkboxBuilder = Checkbox.builder(Component.literal("Show Claims"), minecraft.font);
-        checkboxBuilder.onValueChange((checkbox, bl) -> resetClaims());
-        claimsCheckbox = checkboxBuilder.pos(checkboxX, this.height - 25).build();
-        this.addRenderableWidget(claimsCheckbox);
-
         Button dimensionButton = Button.builder(
             Component.literal(pfu.prettyDimensionName(currentDimension)).withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("Switch Dimension")))),
             (btn) -> {
-                int tilesize = 1 << (17 - zoomlevel);
-                double scale = (double) minimapTileSize / tilesize;
-                if(currentDimension.equals("minecraft_overworld")) {
-                    currentDimension = "minecraft_the_nether";
-                    // Going from OW to N
-                    x = (int)(x - ((this.width / 2)*scale));
-                    z = (int)(z - ((this.height / 2)*scale));
-                    btn.setMessage(Component.literal("Nether"));
-                } else if(currentDimension.equals("minecraft_the_nether")) {
-                    // Going from N to OW
-                    x = (int)(x - ((this.width / 2)*scale));
-                    z = (int)(z - ((this.height / 2)*scale));
-                    currentDimension = "minecraft_terra2";
-                    btn.setMessage(Component.literal("Terra2"));
-                } else if(currentDimension.equals("minecraft_terra2")) {
-                    currentDimension = "minecraft_overworld";
-                    btn.setMessage(Component.literal("Overworld"));
+                String oldDimension = currentDimension;
+                
+                // Find next dimension in cycle
+                int nextIndex = 0;
+                for (int i = 0; i < DIMENSION_CYCLE.length; i++) {
+                    if (DIMENSION_CYCLE[i].equals(oldDimension)) {
+                        nextIndex = (i + 1) % DIMENSION_CYCLE.length;
+                        break;
+                    }
                 }
+                currentDimension = DIMENSION_CYCLE[nextIndex];
+                btn.setMessage(Component.literal(pfu.prettyDimensionName(currentDimension)));
+
+                double coordScale = getDimensionCoordinateScale(oldDimension) / getDimensionCoordinateScale(currentDimension);
+                int zoomDelta = getDimensionZoomOffset(currentDimension) - getDimensionZoomOffset(oldDimension);
+
+                if (coordScale != 1.0 || zoomDelta != 0) {
+                    // Shifting zoom by 3 steps exactly matches an 8x coordinate scale (2^3 = 8)
+                    changeMapScale(zoomDelta, coordScale);
+                }
+
                 onMouseMove(x, z);
                 resetFeatures();
             }
         ).bounds(
             this.width 
-            - 25 
             - minecraft.font.width("Overworld") 
-            - minecraft.font.width("Show Claims")
             - 10, this.height - 26, minecraft.font.width("Overworld") + 5, 20).build();
         this.addRenderableWidget(dimensionButton);
 
@@ -1094,6 +1262,7 @@ public class FullScreenMap extends Screen {
 
         this.addRenderableWidget(negZoomBtn);
         this.addRenderableWidget(posZoomBtn);
+        this.addRenderableWidget(filterBtn);
         this.addRenderableWidget(searchZoomBtn);
         this.addRenderableWidget(settingsBtn);
 
