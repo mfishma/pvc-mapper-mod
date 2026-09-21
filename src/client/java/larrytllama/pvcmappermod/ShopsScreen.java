@@ -194,13 +194,7 @@ public class ShopsScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent mbe, boolean bl) {
         if (mbe.y() > (this.height - 28) && mbe.y() < (this.height - 3) && mbe.x() > 3 && mbe.x() < 196) {
-            Minecraft mc = Minecraft.getInstance();
-            CompatUtils.setScreen(mc, new ConfirmLinkScreen(confirmed -> {
-                if (confirmed) {
-                    Util.getPlatform().openUri(sponsorURLString);
-                }
-                CompatUtils.setScreen(mc, null);
-            }, sponsorURLString, true));
+            ConfirmLinkScreen.confirmLinkNow(null, java.net.URI.create(sponsorURLString));
         }
         return super.mouseClicked(mbe, bl);
     }

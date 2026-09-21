@@ -6,10 +6,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-//? if <1.21.11 {
-import net.minecraft.Util;
-//?} else {
-/*import net.minecraft.util.Util;*///?}
+import java.net.URI;
 import net.minecraft.server.players.ProfileResolver;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.PlayerSkin;
@@ -299,12 +296,7 @@ public class FullScreenMap extends Screen {
                                 Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(
                                     String.format("%s?x=%d&z=%d&dimension=%s", NetworkUtils.BASE_URL, contextMenuWorldX, contextMenuWorldZ, currentDimension)
                                 ), null);
-                            } else if(i==4) CompatUtils.setScreen(Minecraft.getInstance(), new ConfirmLinkScreen(confirmed -> {
-                                if (confirmed) {
-                                    Util.getPlatform().openUri(String.format("%s?x=%d&z=%d&dimension=%s", NetworkUtils.BASE_URL, contextMenuWorldX, contextMenuWorldZ, currentDimension));
-                                }
-                                CompatUtils.setScreen(Minecraft.getInstance(), null);
-                            }, String.format("%s?x=%d&z=%d&dimension=%s", NetworkUtils.BASE_URL, contextMenuWorldX, contextMenuWorldZ, currentDimension), true));
+                            } else if(i==4) ConfirmLinkScreen.confirmLinkNow(null, URI.create(String.format("%s?x=%d&z=%d&dimension=%s", NetworkUtils.BASE_URL, contextMenuWorldX, contextMenuWorldZ, currentDimension)));
                             else if(i==5) {
                                 x = (int) (contextMenuWorldX-(this.width / scale) / 2);
                                 z = (int) (contextMenuWorldZ-(this.height / scale) / 2);
@@ -520,13 +512,7 @@ public class FullScreenMap extends Screen {
         hasMovedX = x;
         hasMovedZ = z;
         if (mbe.y() > (this.height - 28) && mbe.y() < (this.height - 3) && mbe.x() > 3 && mbe.x() < 196) {
-            Minecraft mc = Minecraft.getInstance();
-            CompatUtils.setScreen(mc, new ConfirmLinkScreen(confirmed -> {
-                if (confirmed) {
-                    Util.getPlatform().openUri(sponsorURLString);
-                }
-                CompatUtils.setScreen(mc, null);
-            }, sponsorURLString, true));
+            ConfirmLinkScreen.confirmLinkNow(null, URI.create(sponsorURLString));
         }
         return super.mouseClicked(mbe, bl);
     }

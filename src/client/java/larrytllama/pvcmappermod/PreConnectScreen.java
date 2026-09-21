@@ -5,10 +5,6 @@ import java.util.List;
 
 import larrytllama.pvcmappermod.utils.CompatUtils;
 import net.minecraft.ChatFormatting;
-//? if <1.21.11 {
-import net.minecraft.Util;
-//?} else {
-/*import net.minecraft.util.Util;*///?}
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
@@ -72,14 +68,8 @@ public class PreConnectScreen extends Screen {
         }).pos(20, this.height-65).build();
         this.addRenderableWidget(checkbox);
 
-        this.addRenderableWidget(Button.builder(Component.literal("More Info"), btn -> {
-            CompatUtils.setScreen(Minecraft.getInstance(), new ConfirmLinkScreen(confirmed -> {
-                if (confirmed) {
-                    Util.getPlatform().openUri("https://pvc.coolwebsite.uk/help/data-uploading/");
-                }
-                CompatUtils.setScreen(Minecraft.getInstance(), this);
-            }, "https://pvc.coolwebsite.uk/help/data-uploading/", true));
-        }).bounds(this.width - 110, this.height-65, 100, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("More Info"), ConfirmLinkScreen.confirmLink(this, dataUploadsLink))
+            .bounds(this.width - 110, this.height-65, 100, 20).build());
 
 
         this.addRenderableWidget(Button.builder(Component.literal("Connect to PVC"), btn -> {
