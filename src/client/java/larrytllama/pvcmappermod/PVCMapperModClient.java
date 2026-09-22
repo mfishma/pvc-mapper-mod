@@ -499,6 +499,8 @@ public class PVCMapperModClient implements ClientModInitializer {
             if(pfu.omc == null) return message;
             for (int i = 0; i < pfu.omc.length; i++) {
                 if(pfu.omc[i] == null || pfu.omc[i].includes == null) continue;
+                if(sp.orwellMeter == OrwellianMeter.SMART && pfu.omc[i].replacewith == null) continue;
+                if(sp.orwellMeter == OrwellianMeter.ANGY && pfu.omc[i].angyreplace == null) continue;
                 String otherplayer = "player";
                 if(text.contains(pfu.omc[i].includes)) {
                     for (String word : text.split("\\s+")) {
@@ -508,7 +510,6 @@ public class PVCMapperModClient implements ClientModInitializer {
                         }
                     }
                     if(sp.orwellMeter == OrwellianMeter.SMART) {
-                        if(pfu.omc[i].replacewith == null) continue;
                         String outputtext = pfu.omc[i].replacewith
                             .replaceAll("%player%", Minecraft.getInstance().player.getPlainTextName())
                             .replaceAll("%otherplayer%", otherplayer);
@@ -518,7 +519,6 @@ public class PVCMapperModClient implements ClientModInitializer {
                             return Component.literal(outputtext).withStyle(Style.EMPTY.withColor(ChatFormatting.DARK_GRAY).withItalic(true).withHoverEvent(new HoverEvent.ShowText(Component.literal("Original message content:\n").append(message))));
                         }
                     } else if(sp.orwellMeter == OrwellianMeter.ANGY) {
-                        if(pfu.omc[i].angyreplace == null) continue;
                         String outputtext = pfu.omc[i].angyreplace
                             .replaceAll("%player%", Minecraft.getInstance().player.getPlainTextName())
                             .replaceAll("%otherplayer%", otherplayer);
@@ -526,7 +526,7 @@ public class PVCMapperModClient implements ClientModInitializer {
                     }
                 } else if(sp.orwellMeter == OrwellianMeter.ANGY) {
                     String outputtext = pfu.omc[i].angyreplace
-                        .replaceAll("%player", Minecraft.getInstance().player.getPlainTextName())
+                        .replaceAll("%player%", Minecraft.getInstance().player.getPlainTextName())
                         .replaceAll("%otherplayer%", otherplayer);
                     return orwellMessagePrefixes[applicablePrefix].append(Component.literal(outputtext).withStyle(Style.EMPTY)).withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("Modified by PVC Mapper Mod\nOriginal message content:\n").append(message))));
                 }
